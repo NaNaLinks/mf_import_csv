@@ -28,13 +28,17 @@ pip install selenium
 
 ## 実行方法
 
-1. **スクリプトを実行する前に、マネーフォワードのユーザー名、パスワード、インポート先の口座URLを編集してください。**
-   - 以下のサンプルコードの `user`、`password`、`url` を編集してください。
-   ```python
-   url = "https://moneyforward.com/accounts/show_manual/xxxxxxxxxxxxxxx" # インポート先の口座URL
-   user = "<自分のアカウント>"
-   password = "<自分のパスワード>"
+1. **スクリプトを実行する前に、マネーフォワードのユーザー名、パスワード、インポート先の口座URLを環境変数で指定してください。**
+   - `MF_IMPORT_CSV_ACCOUNT_URL`: インポート先の口座URL
+   - `MF_IMPORT_CSV_USER`: MoneyForwardログインユーザー
+   - `MF_IMPORT_CSV_PASSWORD`: MoneyForwardログインパスワード
+   - 例:
+   ```sh
+   export MF_IMPORT_CSV_ACCOUNT_URL="<インポート先の口座URL>"
+   export MF_IMPORT_CSV_USER="<自分のアカウント>"
+   export MF_IMPORT_CSV_PASSWORD="<自分のパスワード>"
    ```
+   - 認証情報やURLの実値は、コード、README、レポート、Git管理対象ファイルに含めないでください。
 2. CSVファイルをスクリプトと同じフォルダに配置する。
     - Web版マネーフォワードのCSVエクスポート機能で取得できるCSVと同じフォーマットです。
 
