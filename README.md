@@ -58,7 +58,7 @@ python -m playwright install chromium
    - `MF_IMPORT_CSV_PASSWORD`: MoneyForwardログインパスワード
    - `MF_IMPORT_CSV_BROWSER_ENGINE`: `selenium` または `playwright`（未指定時は `selenium`）
    - `MF_IMPORT_CSV_BROWSER_HEADLESS`: `true` または `false`（未指定時は `false`）
-   - `MF_IMPORT_CSV_BROWSER_CHANNEL`: `chrome`、`chromium`、`msedge` など
+   - `MF_IMPORT_CSV_BROWSER_CHANNEL`: `chromium`、`chrome`、`msedge` など
    - 例:
    ```env
    MF_IMPORT_CSV_ACCOUNT_URL="<インポート先の口座URL>"
@@ -66,7 +66,7 @@ python -m playwright install chromium
    MF_IMPORT_CSV_PASSWORD="<自分のパスワード>"
    MF_IMPORT_CSV_BROWSER_ENGINE="selenium"
    MF_IMPORT_CSV_BROWSER_HEADLESS="false"
-   MF_IMPORT_CSV_BROWSER_CHANNEL="chrome"
+   MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
    ```
    - `.env` はGit管理対象にしないでください。
    - 認証情報やURLの実値は、コード、README、レポート、Git管理対象ファイルに含めないでください。
@@ -104,8 +104,10 @@ Seleniumは既定のブラウザエンジンです。未指定の場合もSeleni
 ```env
 MF_IMPORT_CSV_BROWSER_ENGINE="selenium"
 MF_IMPORT_CSV_BROWSER_HEADLESS="false"
-MF_IMPORT_CSV_BROWSER_CHANNEL="chrome"
+MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
 ```
+
+現時点では、Selenium実装における `MF_IMPORT_CSV_BROWSER_CHANNEL` は主に将来拡張・説明用です。SeleniumではローカルにインストールされたGoogle Chromeを使う運用が基本です。
 
 ### Playwrightを使う
 
@@ -118,10 +120,10 @@ python -m playwright install chromium
 ```env
 MF_IMPORT_CSV_BROWSER_ENGINE="playwright"
 MF_IMPORT_CSV_BROWSER_HEADLESS="false"
-MF_IMPORT_CSV_BROWSER_CHANNEL="chrome"
+MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
 ```
 
-`MF_IMPORT_CSV_BROWSER_CHANNEL` は、Playwrightでは `chrome`、`chromium`、`msedge` などを指定できます。`chromium` を指定した場合はPlaywright同梱のChromiumを使います。
+`MF_IMPORT_CSV_BROWSER_CHANNEL` は、Playwrightでは特に意味があります。`chromium` はPlaywright同梱Chromiumを使う想定です。ローカルにGoogle Chromeがインストール済みの場合は `chrome`、Microsoft Edgeがインストール済みの場合は `msedge` を指定できます。
 
 ## 実行環境別メモ
 
@@ -133,17 +135,19 @@ MF_IMPORT_CSV_BROWSER_CHANNEL="chrome"
 MF_IMPORT_CSV_BROWSER_HEADLESS="false"
 ```
 
-SeleniumではローカルにインストールされたGoogle Chromeを使う運用が基本です。Playwrightでは `python -m playwright install chromium` で同梱Chromiumを入れるか、`MF_IMPORT_CSV_BROWSER_CHANNEL="chrome"` で通常のChromeを使います。
+SeleniumではローカルにインストールされたGoogle Chromeを使う運用が基本です。Playwrightでは `python -m playwright install chromium` で同梱Chromiumを入れ、`MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"` を使う構成を基本例にします。ローカルのChromeを使いたい場合は `MF_IMPORT_CSV_BROWSER_CHANNEL="chrome"` を指定します。
 
 ### Ubuntu Server
 
 画面のないサーバーではheadless実行を使います。
 
 ```env
+MF_IMPORT_CSV_BROWSER_ENGINE="playwright"
 MF_IMPORT_CSV_BROWSER_HEADLESS="true"
+MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
 ```
 
-Playwrightを使う場合は、サーバー上でブラウザと依存関係をインストールします。
+Ubuntu Serverでは、Playwright + 同梱Chromium + headlessを推奨例とします。サーバー上でブラウザと依存関係をインストールします。
 
 ```sh
 python -m playwright install --with-deps chromium
