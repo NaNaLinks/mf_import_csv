@@ -3,7 +3,7 @@ import sys
 
 from config import load_required_env
 from csv_validation import print_dry_run, print_validation_result, validate_csv
-from moneyforward_importer import run_import
+from browser_engine import run_import
 
 
 def parse_args():

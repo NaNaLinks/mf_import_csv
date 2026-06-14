@@ -28,6 +28,8 @@ def run_import(input_file, entries, env):
         # Windowsでは NUL, mac/linuxでは /dev/null にログを捨てる
         options.add_argument("--log-level=3")
         options.add_experimental_option("excludeSwitches", ["enable-logging"])
+        if env.get("MF_IMPORT_CSV_BROWSER_HEADLESS", False):
+            options.add_argument("--headless=new")
         driver = webdriver.Chrome(options=options)
         driver.implicitly_wait(10)  # wait
         # マネーフォワードの銀行ページに遷移
