@@ -1,17 +1,35 @@
 import sys
+import os
+import csv
+import time
+from dotenv import load_dotenv
+
+load_dotenv()
+
+required_env_vars = {
+    "MF_IMPORT_CSV_ACCOUNT_URL": os.getenv("MF_IMPORT_CSV_ACCOUNT_URL"),
+    "MF_IMPORT_CSV_USER": os.getenv("MF_IMPORT_CSV_USER"),
+    "MF_IMPORT_CSV_PASSWORD": os.getenv("MF_IMPORT_CSV_PASSWORD"),
+}
+
+missing_env_vars = [name for name, value in required_env_vars.items() if not value]
+if missing_env_vars:
+    print(
+        "Missing required environment variables: " + ", ".join(missing_env_vars),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+url = required_env_vars["MF_IMPORT_CSV_ACCOUNT_URL"]
+user = required_env_vars["MF_IMPORT_CSV_USER"]
+password = required_env_vars["MF_IMPORT_CSV_PASSWORD"]
+
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-import csv
-import time
-
-
-url = "https://moneyforward.com/accounts/show_manual/xxxxxxxxxxxxxxx" #インポート先の口座URL
-user = "<自分のアカウント>"
-password = "<自分のパスワード>" 
 
 
 if len(sys.argv) != 2:

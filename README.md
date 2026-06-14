@@ -23,19 +23,28 @@
 以下のコマンドを実行して必要なライブラリをインストールしてください。
 
 ```sh
-pip install selenium
+pip install -r requirements.txt
 ```
 
 ## 実行方法
 
-1. **スクリプトを実行する前に、マネーフォワードのユーザー名、パスワード、インポート先の口座URLを編集してください。**
-   - 以下のサンプルコードの `user`、`password`、`url` を編集してください。
-   ```python
-   url = "https://moneyforward.com/accounts/show_manual/xxxxxxxxxxxxxxx" # インポート先の口座URL
-   user = "<自分のアカウント>"
-   password = "<自分のパスワード>"
+1. `.env.example` をコピーして `.env` を作成してください。
+   ```sh
+   cp .env.example .env
    ```
-2. CSVファイルをスクリプトと同じフォルダに配置する。
+2. `.env` に、マネーフォワードのユーザー名、パスワード、インポート先の口座URLを指定してください。
+   - `MF_IMPORT_CSV_ACCOUNT_URL`: インポート先の口座URL
+   - `MF_IMPORT_CSV_USER`: MoneyForwardログインユーザー
+   - `MF_IMPORT_CSV_PASSWORD`: MoneyForwardログインパスワード
+   - 例:
+   ```env
+   MF_IMPORT_CSV_ACCOUNT_URL="<インポート先の口座URL>"
+   MF_IMPORT_CSV_USER="<自分のアカウント>"
+   MF_IMPORT_CSV_PASSWORD="<自分のパスワード>"
+   ```
+   - `.env` はGit管理対象にしないでください。
+   - 認証情報やURLの実値は、コード、README、レポート、Git管理対象ファイルに含めないでください。
+3. CSVファイルをスクリプトと同じフォルダに配置する。
     - Web版マネーフォワードのCSVエクスポート機能で取得できるCSVと同じフォーマットです。
 
 ```
@@ -51,7 +60,7 @@ pip install selenium
 [9] "ID"
 ```
 
-3. スクリプトを実行
+4. スクリプトを実行
 
 ```sh
 python mf_import_csv.py data.csv
