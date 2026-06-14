@@ -2,6 +2,9 @@ import sys
 import os
 import csv
 import time
+from dotenv import load_dotenv
+
+load_dotenv()
 
 required_env_vars = {
     "MF_IMPORT_CSV_ACCOUNT_URL": os.getenv("MF_IMPORT_CSV_ACCOUNT_URL"),
