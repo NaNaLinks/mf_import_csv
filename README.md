@@ -29,6 +29,13 @@
 pip install -r requirements.txt
 ```
 
+## ファイル構成
+
+- `mf_import_csv.py`: CLI入口と実行制御
+- `csv_validation.py`: CSV検証とdry-run表示
+- `config.py`: `.env` 読み込みと必須環境変数チェック
+- `moneyforward_importer.py`: Seleniumを使ったマネーフォワード画面操作
+
 ## 実行方法
 
 1. `.env.example` をコピーして `.env` を作成してください。
