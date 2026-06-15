@@ -18,8 +18,25 @@ def _launch_browser(playwright, env):
     return playwright.chromium.launch(**launch_options)
 
 
-def _click_text(page, text):
-    page.get_by_text(text, exact=True).click()
+def _click_exact_text_in_locator(locator, text):
+    target = text.strip()
+    count = locator.count()
+
+    for index in range(count):
+        item = locator.nth(index)
+        if (item.text_content() or "").strip() == target:
+            item.click()
+            return
+
+    raise RuntimeError(f"クリック対象が見つかりません: {target}")
+
+
+def _click_large_category(page, text):
+    _click_exact_text_in_locator(page.locator("a.l_c_name"), text)
+
+
+def _click_middle_category(page, text):
+    _click_exact_text_in_locator(page.locator("a.m_c_name"), text)
 
 
 def run_import(input_file, entries, env):
@@ -118,7 +135,7 @@ def run_import(input_file, entries, env):
                 # 大項目
                 if row[5] != "未分類":
                     page.locator("#js-large-category-selected").click()
-                    _click_text(page, row[5])
+                    _click_large_category(page, row[5])
 
                 # 中項目
                 if row[6] != "未分類":
@@ -128,7 +145,7 @@ def run_import(input_file, entries, env):
 
                     print("sub_category:" + sub_category)
                     page.locator("#js-middle-category-selected").click()
-                    _click_text(page, sub_category)
+                    _click_middle_category(page, sub_category)
 
                 # 内容
                 if row[7] == "":
