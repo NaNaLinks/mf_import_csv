@@ -50,6 +50,15 @@ def load_required_env():
             "MF_IMPORT_CSV_BROWSER_CHANNEL": os.getenv(
                 "MF_IMPORT_CSV_BROWSER_CHANNEL", ""
             ).strip(),
+            "MF_IMPORT_CSV_REUSE_LOGIN_SESSION": _parse_bool(
+                os.getenv("MF_IMPORT_CSV_REUSE_LOGIN_SESSION"),
+                default=False,
+            ),
+            "MF_IMPORT_CSV_BROWSER_PROFILE_DIR": os.getenv(
+                "MF_IMPORT_CSV_BROWSER_PROFILE_DIR",
+                ".auth/moneyforward-playwright",
+            ).strip()
+            or ".auth/moneyforward-playwright",
         }
     )
 

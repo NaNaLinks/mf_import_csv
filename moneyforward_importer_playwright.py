@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 
 def import_playwright():
@@ -7,7 +8,7 @@ def import_playwright():
     return sync_playwright, TimeoutError
 
 
-def _launch_browser(playwright, env):
+def _build_launch_options(env):
     channel = env.get("MF_IMPORT_CSV_BROWSER_CHANNEL", "")
     headless = env.get("MF_IMPORT_CSV_BROWSER_HEADLESS", False)
     launch_options = {"headless": headless}
@@ -15,7 +16,127 @@ def _launch_browser(playwright, env):
     if channel and channel != "chromium":
         launch_options["channel"] = channel
 
-    return playwright.chromium.launch(**launch_options)
+    return launch_options
+
+
+def _launch_page(playwright, env):
+    launch_options = _build_launch_options(env)
+
+    if env.get("MF_IMPORT_CSV_REUSE_LOGIN_SESSION", False):
+        profile_dir = Path(
+            env.get(
+                "MF_IMPORT_CSV_BROWSER_PROFILE_DIR",
+                ".auth/moneyforward-playwright",
+            )
+        ).expanduser()
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        context = playwright.chromium.launch_persistent_context(
+            str(profile_dir),
+            **launch_options,
+        )
+        page = context.pages[0] if context.pages else context.new_page()
+        return page, context.close
+
+    browser = playwright.chromium.launch(**launch_options)
+    page = browser.new_page()
+    return page, browser.close
+
+
+def _wait_visible(locator, timeout, PlaywrightTimeoutError):
+    try:
+        locator.wait_for(state="visible", timeout=timeout)
+        return True
+    except PlaywrightTimeoutError:
+        return False
+
+
+def _is_import_page_ready(page, PlaywrightTimeoutError, timeout=3000):
+    return _wait_visible(page.locator(".cf-new-btn"), timeout, PlaywrightTimeoutError)
+
+
+def _is_login_form_visible(page, PlaywrightTimeoutError, timeout=3000):
+    return _wait_visible(
+        page.locator('[id="mfid_user[email]"]'),
+        timeout,
+        PlaywrightTimeoutError,
+    )
+
+
+def _is_auth_challenge_visible(page, PlaywrightTimeoutError, timeout=1000):
+    return _wait_visible(
+        page.locator('[name="otp_attempt"]'),
+        timeout,
+        PlaywrightTimeoutError,
+    ) or _wait_visible(
+        page.locator('[name="email_otp"]'),
+        timeout,
+        PlaywrightTimeoutError,
+    )
+
+
+def _submit_login(page, user, password):
+    # アカウント入力
+    elem = page.locator('[id="mfid_user[email]"]')
+    elem.fill("")
+    elem.press_sequentially(user)
+    elem.press("Enter")
+
+    # パスワード入力
+    elem = page.locator('[id="mfid_user[password]"]')
+    elem.fill("")
+    elem.press_sequentially(password)
+    elem.press("Enter")
+
+
+def _handle_auth_challenges(page, PlaywrightTimeoutError):
+    # ここでOTP入力画面が出る場合があるので対応
+    optauth = False
+    otp_elem = page.locator('[name="otp_attempt"]')
+    if _wait_visible(otp_elem, 2000, PlaywrightTimeoutError):
+        otp_code = input("２段階認証コードを入力してください: ")
+        otp_elem.fill("")
+        otp_elem.press_sequentially(otp_code)
+        otp_elem.press("Enter")
+        print("２段階認証コードを送信しました。")
+        optauth = True
+    else:
+        # OTPフォームが出てこなければそのまま先へ
+        print("２段階認証コード入力画面が表示されませんでした。")
+
+    # 2段階認証無効時は追加認証画面が出てくる場合がある
+    if optauth is False:
+        otp_elem = page.locator('[name="email_otp"]')
+        if _wait_visible(otp_elem, 2000, PlaywrightTimeoutError):
+            otp_code = input("追加認証コードを入力してください: ")
+            otp_elem.fill("")
+            otp_elem.press_sequentially(otp_code)
+            otp_elem.press("Enter")
+            print("追加認証コードを送信しました。")
+        else:
+            # OTPフォームが出てこなければそのまま先へ
+            print("追加認証コード入力画面は表示されませんでした。")
+
+
+def _ensure_logged_in(page, user, password, PlaywrightTimeoutError):
+    if _is_import_page_ready(page, PlaywrightTimeoutError):
+        print("ログイン済みセッションを利用して登録ページへ進みます。")
+        return
+
+    if _is_login_form_visible(page, PlaywrightTimeoutError):
+        _submit_login(page, user, password)
+        _handle_auth_challenges(page, PlaywrightTimeoutError)
+    elif _is_auth_challenge_visible(page, PlaywrightTimeoutError):
+        _handle_auth_challenges(page, PlaywrightTimeoutError)
+    else:
+        raise RuntimeError(
+            "ログイン状態を判定できませんでした。ログインフォーム、追加認証フォーム、"
+            "登録ページのいずれも確認できません。"
+        )
+
+    if not _is_import_page_ready(page, PlaywrightTimeoutError, timeout=15000):
+        raise RuntimeError(
+            "ログイン後に登録ページを確認できませんでした。認証状態または画面表示を確認してください。"
+        )
 
 
 def _click_exact_text_in_locator(locator, text):
@@ -48,52 +169,11 @@ def run_import(input_file, entries, env):
 
     print("Start :" + input_file)
     with sync_playwright() as playwright:
-        browser = _launch_browser(playwright, env)
-        page = browser.new_page()
+        page, close_browser = _launch_page(playwright, env)
 
         try:
             page.goto(url)
-
-            # アカウント入力
-            elem = page.locator('[id="mfid_user[email]"]')
-            elem.fill("")
-            elem.press_sequentially(user)
-            elem.press("Enter")
-
-            # パスワード入力
-            elem = page.locator('[id="mfid_user[password]"]')
-            elem.fill("")
-            elem.press_sequentially(password)
-            elem.press("Enter")
-
-            # ここでOTP入力画面が出る場合があるので対応
-            optauth = False
-            try:
-                otp_elem = page.locator('[name="otp_attempt"]')
-                otp_elem.wait_for(state="visible", timeout=2000)
-                otp_code = input("２段階認証コードを入力してください: ")
-                otp_elem.fill("")
-                otp_elem.press_sequentially(otp_code)
-                otp_elem.press("Enter")
-                print("２段階認証コードを送信しました。")
-                optauth = True
-            except PlaywrightTimeoutError:
-                # OTPフォームが出てこなければそのまま先へ
-                print("２段階認証コード入力画面が表示されませんでした。")
-
-            # 2段階認証無効時は追加認証画面が出てくる場合がある
-            if optauth is False:
-                try:
-                    otp_elem = page.locator('[name="email_otp"]')
-                    otp_elem.wait_for(state="visible", timeout=2000)
-                    otp_code = input("追加認証コードを入力してください: ")
-                    otp_elem.fill("")
-                    otp_elem.press_sequentially(otp_code)
-                    otp_elem.press("Enter")
-                    print("追加認証コードを送信しました。")
-                except PlaywrightTimeoutError:
-                    # OTPフォームが出てこなければそのまま先へ
-                    print("追加認証コード入力画面は表示されませんでした。")
+            _ensure_logged_in(page, user, password, PlaywrightTimeoutError)
 
             for entry in entries:
                 row = entry.row
@@ -170,4 +250,4 @@ def run_import(input_file, entries, env):
                 time.sleep(5)
         finally:
             print("End :" + input_file)
-            browser.close()
+            close_browser()
