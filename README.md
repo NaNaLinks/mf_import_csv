@@ -59,6 +59,8 @@ python -m playwright install chromium
    - `MF_IMPORT_CSV_BROWSER_ENGINE`: `selenium` または `playwright`（未指定時は `selenium`）
    - `MF_IMPORT_CSV_BROWSER_HEADLESS`: `true` または `false`（未指定時は `false`）
    - `MF_IMPORT_CSV_BROWSER_CHANNEL`: `chromium`、`chrome`、`msedge` など
+   - `MF_IMPORT_CSV_REUSE_LOGIN_SESSION`: Playwrightでログイン済みブラウザ状態を再利用する場合は `true`（未指定時は `false`）
+   - `MF_IMPORT_CSV_BROWSER_PROFILE_DIR`: Playwrightのログイン状態保存先（未指定時は `.auth/moneyforward-playwright`）
    - 例:
    ```env
    MF_IMPORT_CSV_ACCOUNT_URL="<インポート先の口座URL>"
@@ -67,8 +69,11 @@ python -m playwright install chromium
    MF_IMPORT_CSV_BROWSER_ENGINE="selenium"
    MF_IMPORT_CSV_BROWSER_HEADLESS="false"
    MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
+   MF_IMPORT_CSV_REUSE_LOGIN_SESSION="true"
+   MF_IMPORT_CSV_BROWSER_PROFILE_DIR=".auth/moneyforward-playwright"
    ```
    - `.env` はGit管理対象にしないでください。
+   - `.auth/` はログイン済みブラウザ状態を含むため、Git管理対象にしないでください。
    - 認証情報やURLの実値は、コード、README、レポート、Git管理対象ファイルに含めないでください。
 3. CSVファイルをスクリプトと同じフォルダに配置する。
     - Web版マネーフォワードのCSVエクスポート機能で取得できるCSVと同じフォーマットです。
@@ -121,9 +126,15 @@ python -m playwright install chromium
 MF_IMPORT_CSV_BROWSER_ENGINE="playwright"
 MF_IMPORT_CSV_BROWSER_HEADLESS="false"
 MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
+MF_IMPORT_CSV_REUSE_LOGIN_SESSION="true"
+MF_IMPORT_CSV_BROWSER_PROFILE_DIR=".auth/moneyforward-playwright"
 ```
 
 `MF_IMPORT_CSV_BROWSER_CHANNEL` は、Playwrightでは特に意味があります。`chromium` はPlaywright同梱Chromiumを使う想定です。ローカルにGoogle Chromeがインストール済みの場合は `chrome`、Microsoft Edgeがインストール済みの場合は `msedge` を指定できます。
+
+`MF_IMPORT_CSV_REUSE_LOGIN_SESSION="true"` を指定すると、Playwrightは `MF_IMPORT_CSV_BROWSER_PROFILE_DIR` の専用ブラウザプロファイルを使います。初回実行時にログインや追加認証を済ませると、2回目以降はサービス側が承認済みと判断する限り、そのログイン状態を再利用します。サービス側が再確認を要求した場合は、従来どおり画面に従って認証コードを入力してください。
+
+保存先の `.auth/` にはログイン済みブラウザ状態が含まれます。中身を共有したり、Gitに追加したりしないでください。互換性を優先し、未指定時の `MF_IMPORT_CSV_REUSE_LOGIN_SESSION` は `false` です。
 
 ## 実行環境別メモ
 
