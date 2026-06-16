@@ -6,11 +6,26 @@ from csv_validation import print_dry_run, print_validation_result, validate_csv
 from browser_engine import run_import
 
 
+def build_account_url(account_id):
+    account_id = account_id.strip()
+    if not account_id:
+        raise ValueError("--account-id must not be empty.")
+
+    return "https://moneyforward.com/accounts/show_manual/" + account_id
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="MoneyForwardへCSVデータを登録します。"
     )
     parser.add_argument("input_file", help="読み込むCSVファイル")
+    parser.add_argument(
+        "--account-id",
+        help=(
+            "手入力口座IDを指定します。指定時は"
+            "MF_IMPORT_CSV_ACCOUNT_URLより優先されます。"
+        ),
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -46,7 +61,14 @@ def main():
     if args.dry_run:
         return 0
 
-    env = load_required_env()
+    env = load_required_env(require_account_url=args.account_id is None)
+    if args.account_id is not None:
+        try:
+            env["MF_IMPORT_CSV_ACCOUNT_URL"] = build_account_url(args.account_id)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
     run_import(args.input_file, result.entries, env)
     return 0
 

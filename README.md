@@ -14,6 +14,7 @@
 - dry-runによる登録予定内容の確認
 - validate-onlyによるCSV検証のみの実行
 - Selenium / Playwright のブラウザエンジン切替
+- CLI引数による手入力口座ID指定
 
 ## 必要な環境
 
@@ -53,7 +54,7 @@ python -m playwright install chromium
    cp .env.example .env
    ```
 2. `.env` に、マネーフォワードのユーザー名、パスワード、インポート先の口座URLを指定してください。
-   - `MF_IMPORT_CSV_ACCOUNT_URL`: インポート先の口座URL
+   - `MF_IMPORT_CSV_ACCOUNT_URL`: インポート先の口座URL。`--account-id` 指定時は省略できます。
    - `MF_IMPORT_CSV_USER`: MoneyForwardログインユーザー
    - `MF_IMPORT_CSV_PASSWORD`: MoneyForwardログインパスワード
    - `MF_IMPORT_CSV_BROWSER_ENGINE`: `selenium` または `playwright`（未指定時は `selenium`）
@@ -72,6 +73,7 @@ python -m playwright install chromium
    MF_IMPORT_CSV_REUSE_LOGIN_SESSION="true"
    MF_IMPORT_CSV_BROWSER_PROFILE_DIR=".auth/moneyforward-playwright"
    ```
+   - 手入力口座IDをCLIで指定する場合は、`.env` の `MF_IMPORT_CSV_ACCOUNT_URL` より `--account-id` が優先されます。
    - `.env` はGit管理対象にしないでください。
    - `.auth/` はログイン済みブラウザ状態を含むため、Git管理対象にしないでください。
    - 認証情報やURLの実値は、コード、README、レポート、Git管理対象ファイルに含めないでください。
@@ -99,6 +101,13 @@ python mf_import_csv.py data.csv
 
 - `data.csv` はインポートするCSVファイルのパスです。
 - 通常実行ではCSV検証後にマネーフォワードへログインし、登録処理を行います。
+- インポート先口座を手入力口座IDで指定する場合は、以下のように実行します。
+
+```sh
+python mf_import_csv.py data.csv --account-id 123456
+```
+
+`--account-id` は `https://moneyforward.com/accounts/show_manual/123456` のような口座URLに変換され、`.env` の `MF_IMPORT_CSV_ACCOUNT_URL` より優先されます。
 
 ## ブラウザエンジン設定
 
