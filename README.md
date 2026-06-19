@@ -15,6 +15,7 @@
 - validate-onlyによるCSV検証のみの実行
 - Selenium / Playwright のブラウザエンジン切替
 - CLI引数による手入力口座ID指定
+- CLI引数による手入力口座エイリアス指定
 
 ## 必要な環境
 
@@ -46,6 +47,7 @@ python -m playwright install chromium
 - `browser_engine.py`: ブラウザエンジン選択
 - `moneyforward_importer.py`: Seleniumを使ったマネーフォワード画面操作
 - `moneyforward_importer_playwright.py`: Playwrightを使ったマネーフォワード画面操作
+- `account_aliases.example.json`: 口座エイリアス設定のサンプル
 
 ## 実行方法
 
@@ -74,7 +76,9 @@ python -m playwright install chromium
    MF_IMPORT_CSV_BROWSER_PROFILE_DIR=".auth/moneyforward-playwright"
    ```
    - 手入力口座IDをCLIで指定する場合は、`.env` の `MF_IMPORT_CSV_ACCOUNT_URL` より `--account-id` が優先されます。
+   - 口座エイリアスをCLIで指定する場合は、`.env` の `MF_IMPORT_CSV_ACCOUNT_URL` より `--account` が優先されます。
    - `.env` はGit管理対象にしないでください。
+   - `account_aliases.json` は実口座IDを含み得るため、Git管理対象にしないでください。
    - `.auth/` はログイン済みブラウザ状態を含むため、Git管理対象にしないでください。
    - 認証情報やURLの実値は、コード、README、レポート、Git管理対象ファイルに含めないでください。
 3. CSVファイルをスクリプトと同じフォルダに配置する。
@@ -108,6 +112,30 @@ python mf_import_csv.py data.csv --account-id 123456
 ```
 
 `--account-id` は `https://moneyforward.com/accounts/show_manual/123456` のような口座URLに変換され、`.env` の `MF_IMPORT_CSV_ACCOUNT_URL` より優先されます。
+
+インポート先口座をエイリアスで指定する場合は、`account_aliases.example.json` をコピーして `account_aliases.json` を作成してください。
+
+```sh
+cp account_aliases.example.json account_aliases.json
+```
+
+`account_aliases.json` には、口座エイリアスと手入力口座IDの対応をJSONで定義します。以下はダミー値の例です。実口座IDをREADME、レポート、PR本文、Git管理対象ファイルへ書かないでください。
+
+```json
+{
+  "cash": "123456",
+  "paypay": "234567",
+  "private-cash": "345678"
+}
+```
+
+作成後、以下のように実行できます。
+
+```sh
+python mf_import_csv.py data.csv --account cash
+```
+
+`--account` は `account_aliases.json` から口座IDを取得し、`https://moneyforward.com/accounts/show_manual/<口座ID>` の形式に変換されます。`--account` と `--account-id` は同時に指定できません。どちらも指定しない場合は、従来どおり `.env` の `MF_IMPORT_CSV_ACCOUNT_URL` を使います。
 
 ## ブラウザエンジン設定
 
