@@ -1,6 +1,11 @@
 import time
 from pathlib import Path
 
+from account_aliases_generator import extract_manual_account_aliases
+
+
+ACCOUNTS_URL = "https://moneyforward.com/accounts"
+
 
 def import_playwright():
     from playwright.sync_api import TimeoutError, sync_playwright
@@ -52,6 +57,21 @@ def _wait_visible(locator, timeout, PlaywrightTimeoutError):
 
 def _is_import_page_ready(page, PlaywrightTimeoutError, timeout=3000):
     return _wait_visible(page.locator(".cf-new-btn"), timeout, PlaywrightTimeoutError)
+
+
+def _is_accounts_page_ready(page, PlaywrightTimeoutError, timeout=3000):
+    if _wait_visible(
+        page.locator('a[href*="/accounts/show_manual/"]').first,
+        timeout,
+        PlaywrightTimeoutError,
+    ):
+        return True
+
+    return "/accounts" in page.url and not _is_login_form_visible(
+        page,
+        PlaywrightTimeoutError,
+        timeout=500,
+    )
 
 
 def _is_login_form_visible(page, PlaywrightTimeoutError, timeout=3000):
@@ -117,9 +137,17 @@ def _handle_auth_challenges(page, PlaywrightTimeoutError):
             print("追加認証コード入力画面は表示されませんでした。")
 
 
-def _ensure_logged_in(page, user, password, PlaywrightTimeoutError):
-    if _is_import_page_ready(page, PlaywrightTimeoutError):
-        print("ログイン済みセッションを利用して登録ページへ進みます。")
+def _ensure_logged_in(
+    page,
+    user,
+    password,
+    PlaywrightTimeoutError,
+    is_ready,
+    ready_message,
+    failure_message,
+):
+    if is_ready(page, PlaywrightTimeoutError):
+        print(ready_message)
         return
 
     if _is_login_form_visible(page, PlaywrightTimeoutError):
@@ -130,13 +158,35 @@ def _ensure_logged_in(page, user, password, PlaywrightTimeoutError):
     else:
         raise RuntimeError(
             "ログイン状態を判定できませんでした。ログインフォーム、追加認証フォーム、"
-            "登録ページのいずれも確認できません。"
+            "目的ページのいずれも確認できません。"
         )
 
-    if not _is_import_page_ready(page, PlaywrightTimeoutError, timeout=15000):
-        raise RuntimeError(
-            "ログイン後に登録ページを確認できませんでした。認証状態または画面表示を確認してください。"
-        )
+    if not is_ready(page, PlaywrightTimeoutError, timeout=15000):
+        raise RuntimeError(failure_message)
+
+
+def _ensure_logged_in_for_import(page, user, password, PlaywrightTimeoutError):
+    _ensure_logged_in(
+        page,
+        user,
+        password,
+        PlaywrightTimeoutError,
+        _is_import_page_ready,
+        "ログイン済みセッションを利用して登録ページへ進みます。",
+        "ログイン後に登録ページを確認できませんでした。認証状態または画面表示を確認してください。",
+    )
+
+
+def _ensure_logged_in_for_accounts(page, user, password, PlaywrightTimeoutError):
+    _ensure_logged_in(
+        page,
+        user,
+        password,
+        PlaywrightTimeoutError,
+        _is_accounts_page_ready,
+        "ログイン済みセッションを利用して口座一覧ページへ進みます。",
+        "ログイン後に口座一覧ページを確認できませんでした。認証状態または画面表示を確認してください。",
+    )
 
 
 def _click_exact_text_in_locator(locator, text):
@@ -160,6 +210,51 @@ def _click_middle_category(page, text):
     _click_exact_text_in_locator(page.locator("a.m_c_name"), text)
 
 
+def _collect_manual_account_links(page):
+    link_items = []
+    links = page.locator('a[href*="/accounts/show_manual/"]')
+
+    for index in range(links.count()):
+        link = links.nth(index)
+        container = link.locator(
+            "xpath=ancestor::*[self::li or self::tr or self::div][1]"
+        )
+        container_text = ""
+        if container.count() > 0:
+            container_text = container.first.text_content() or ""
+
+        link_items.append(
+            {
+                "href": link.get_attribute("href") or "",
+                "text": link.text_content() or "",
+                "container_text": container_text,
+            }
+        )
+
+    return link_items
+
+
+def generate_account_aliases(env):
+    sync_playwright, PlaywrightTimeoutError = import_playwright()
+
+    user = env["MF_IMPORT_CSV_USER"]
+    password = env["MF_IMPORT_CSV_PASSWORD"]
+
+    with sync_playwright() as playwright:
+        page, close_browser = _launch_page(playwright, env)
+
+        try:
+            page.goto(ACCOUNTS_URL)
+            _ensure_logged_in_for_accounts(page, user, password, PlaywrightTimeoutError)
+            try:
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except PlaywrightTimeoutError:
+                pass
+            return extract_manual_account_aliases(_collect_manual_account_links(page))
+        finally:
+            close_browser()
+
+
 def run_import(input_file, entries, env):
     sync_playwright, PlaywrightTimeoutError = import_playwright()
 
@@ -173,7 +268,7 @@ def run_import(input_file, entries, env):
 
         try:
             page.goto(url)
-            _ensure_logged_in(page, user, password, PlaywrightTimeoutError)
+            _ensure_logged_in_for_import(page, user, password, PlaywrightTimeoutError)
 
             for entry in entries:
                 row = entry.row

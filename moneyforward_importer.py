@@ -1,19 +1,156 @@
 import time
 
+from account_aliases_generator import extract_manual_account_aliases
+
+
+ACCOUNTS_URL = "https://moneyforward.com/accounts"
+
 
 def import_selenium():
     from selenium import webdriver
-    from selenium.common.exceptions import TimeoutException
+    from selenium.common.exceptions import NoSuchElementException, TimeoutException
     from selenium.webdriver.common.by import By
     from selenium.webdriver.common.keys import Keys
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.ui import WebDriverWait
 
-    return webdriver, Keys, By, WebDriverWait, EC, TimeoutException
+    return (
+        webdriver,
+        Keys,
+        By,
+        WebDriverWait,
+        EC,
+        NoSuchElementException,
+        TimeoutException,
+    )
+
+
+def _new_driver(webdriver, env):
+    options = webdriver.ChromeOptions()
+    options.add_argument("--log-level=3")
+    options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    if env.get("MF_IMPORT_CSV_BROWSER_HEADLESS", False):
+        options.add_argument("--headless=new")
+    driver = webdriver.Chrome(options=options)
+    driver.implicitly_wait(10)
+    return driver
+
+
+def _submit_login(driver, Keys, By, user, password):
+    elem = driver.find_element(By.ID, "mfid_user[email]")
+    elem.clear()
+    elem.send_keys(user, Keys.ENTER)
+
+    elem = driver.find_element(By.ID, "mfid_user[password]")
+    elem.clear()
+    elem.send_keys(password, Keys.ENTER)
+
+
+def _handle_auth_challenges(driver, Keys, By, WebDriverWait, EC, TimeoutException):
+    optauth = False
+    try:
+        otp_elem = WebDriverWait(driver, 2).until(
+            EC.presence_of_element_located((By.NAME, "otp_attempt"))
+        )
+        otp_code = input("２段階認証コードを入力してください: ")
+        otp_elem.clear()
+        otp_elem.send_keys(otp_code, Keys.ENTER)
+        print("２段階認証コードを送信しました。")
+        optauth = True
+    except TimeoutException:
+        print("２段階認証コード入力画面が表示されませんでした。")
+
+    if optauth is False:
+        try:
+            otp_elem = WebDriverWait(driver, 2).until(
+                EC.presence_of_element_located((By.NAME, "email_otp"))
+            )
+            otp_code = input("追加認証コードを入力してください: ")
+            otp_elem.clear()
+            otp_elem.send_keys(otp_code, Keys.ENTER)
+            print("追加認証コードを送信しました。")
+        except TimeoutException:
+            print("追加認証コード入力画面は表示されませんでした。")
+
+
+def _collect_manual_account_links(driver, By):
+    link_items = []
+    links = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/accounts/show_manual/"]')
+
+    for link in links:
+        container_text = ""
+        try:
+            container = link.find_element(
+                By.XPATH,
+                "ancestor::*[self::li or self::tr or self::div][1]",
+            )
+            container_text = container.text
+        except Exception:
+            container_text = ""
+
+        link_items.append(
+            {
+                "href": link.get_attribute("href") or "",
+                "text": link.text or "",
+                "container_text": container_text,
+            }
+        )
+
+    return link_items
+
+
+def generate_account_aliases(env):
+    (
+        webdriver,
+        Keys,
+        By,
+        WebDriverWait,
+        EC,
+        NoSuchElementException,
+        TimeoutException,
+    ) = import_selenium()
+
+    user = env["MF_IMPORT_CSV_USER"]
+    password = env["MF_IMPORT_CSV_PASSWORD"]
+    driver = None
+
+    try:
+        driver = _new_driver(webdriver, env)
+        driver.get(ACCOUNTS_URL)
+
+        try:
+            driver.find_element(By.ID, "mfid_user[email]")
+            _submit_login(driver, Keys, By, user, password)
+            _handle_auth_challenges(
+                driver,
+                Keys,
+                By,
+                WebDriverWait,
+                EC,
+                TimeoutException,
+            )
+        except NoSuchElementException:
+            pass
+
+        WebDriverWait(driver, 15).until(
+            lambda current_driver: "/accounts" in current_driver.current_url
+        )
+        return extract_manual_account_aliases(_collect_manual_account_links(driver, By))
+    finally:
+        if driver is not None:
+            driver.quit()
 
 
 def run_import(input_file, entries, env):
-    webdriver, Keys, By, WebDriverWait, EC, TimeoutException = import_selenium()
+    (
+        webdriver,
+        Keys,
+        By,
+        WebDriverWait,
+        EC,
+        NoSuchElementException,
+        TimeoutException,
+    ) = import_selenium()
 
     url = env["MF_IMPORT_CSV_ACCOUNT_URL"]
     user = env["MF_IMPORT_CSV_USER"]
@@ -24,55 +161,15 @@ def run_import(input_file, entries, env):
         print("Start :" + input_file)
 
         # Chromeブラウザを立ち上げる
-        options = webdriver.ChromeOptions()
-        # Windowsでは NUL, mac/linuxでは /dev/null にログを捨てる
-        options.add_argument("--log-level=3")
-        options.add_experimental_option("excludeSwitches", ["enable-logging"])
-        if env.get("MF_IMPORT_CSV_BROWSER_HEADLESS", False):
-            options.add_argument("--headless=new")
-        driver = webdriver.Chrome(options=options)
-        driver.implicitly_wait(10)  # wait
+        driver = _new_driver(webdriver, env)
         # マネーフォワードの銀行ページに遷移
         driver.get(url)
 
         # アカウント入力
-        elem = driver.find_element(By.ID, "mfid_user[email]")
-        elem.clear()
-        elem.send_keys(user, Keys.ENTER)
-
-        # パスワード入力
-        elem = driver.find_element(By.ID, "mfid_user[password]")
-        elem.clear()
-        elem.send_keys(password, Keys.ENTER)
+        _submit_login(driver, Keys, By, user, password)
 
         # ここでOTP入力画面が出る場合があるので対応
-        optauth = False
-        try:
-            otp_elem = WebDriverWait(driver, 2).until(
-                EC.presence_of_element_located((By.NAME, "otp_attempt"))
-            )
-            otp_code = input("２段階認証コードを入力してください: ")
-            otp_elem.clear()
-            otp_elem.send_keys(otp_code, Keys.ENTER)
-            print("２段階認証コードを送信しました。")
-            optauth = True
-        except TimeoutException:
-            # OTPフォームが出てこなければそのまま先へ
-            print("２段階認証コード入力画面が表示されませんでした。")
-
-        # 2段階認証無効時は追加認証画面が出てくる場合がある
-        if optauth is False:
-            try:
-                otp_elem = WebDriverWait(driver, 2).until(
-                    EC.presence_of_element_located((By.NAME, "email_otp"))
-                )
-                otp_code = input("追加認証コードを入力してください: ")
-                otp_elem.clear()
-                otp_elem.send_keys(otp_code, Keys.ENTER)
-                print("追加認証コードを送信しました。")
-            except TimeoutException:
-                # OTPフォームが出てこなければそのまま先へ
-                print("追加認証コード入力画面は表示されませんでした。")
+        _handle_auth_challenges(driver, Keys, By, WebDriverWait, EC, TimeoutException)
 
         for entry in entries:
             row = entry.row
