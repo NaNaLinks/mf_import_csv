@@ -16,6 +16,7 @@
 - Selenium / Playwright のブラウザエンジン切替
 - CLI引数による手入力口座ID指定
 - CLI引数による手入力口座エイリアス指定
+- MoneyForwardの手入力口座一覧からの口座エイリアス設定生成
 
 ## 必要な環境
 
@@ -47,6 +48,7 @@ python -m playwright install chromium
 - `browser_engine.py`: ブラウザエンジン選択
 - `moneyforward_importer.py`: Seleniumを使ったマネーフォワード画面操作
 - `moneyforward_importer_playwright.py`: Playwrightを使ったマネーフォワード画面操作
+- `account_aliases_generator.py`: 手入力口座リンクの抽出とエイリアス設定生成
 - `account_aliases.example.json`: 口座エイリアス設定のサンプル
 
 ## 実行方法
@@ -136,6 +138,30 @@ python mf_import_csv.py data.csv --account cash
 ```
 
 `--account` は `account_aliases.json` から口座IDを取得し、`https://moneyforward.com/accounts/show_manual/<口座ID>` の形式に変換されます。`--account` と `--account-id` は同時に指定できません。どちらも指定しない場合は、従来どおり `.env` の `MF_IMPORT_CSV_ACCOUNT_URL` を使います。
+
+### account_aliases.jsonを自動生成する
+
+MoneyForwardの手入力口座一覧から、`account_aliases.json` を生成できます。CSVファイルは不要です。
+
+```sh
+python mf_import_csv.py --generate-account-aliases
+```
+
+このモードではMoneyForwardへログインし、`https://moneyforward.com/accounts` のリンクから `/accounts/show_manual/<口座ID>` を含む手入力口座だけを抽出します。自動連携口座は対象にしません。
+
+既存の `account_aliases.json` がある場合、デフォルトでは上書きせずに終了します。別ファイルへ出力する場合は `--output` を使います。
+
+```sh
+python mf_import_csv.py --generate-account-aliases --output account_aliases.new.json
+```
+
+既存ファイルを上書きする場合だけ、明示的に `--force` を指定してください。
+
+```sh
+python mf_import_csv.py --generate-account-aliases --force
+```
+
+生成されるJSONには実口座IDが含まれます。`account_aliases.json` やログイン済みブラウザ状態を含む `.auth/` はGitへ追加しないでください。README、PR本文、レポートにも実口座IDや認証情報を書かないでください。
 
 ## ブラウザエンジン設定
 

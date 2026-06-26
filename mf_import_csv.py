@@ -3,12 +3,16 @@ import json
 import os
 import sys
 
+from account_aliases_generator import (
+    DEFAULT_ACCOUNT_ALIASES_FILE,
+    write_account_aliases,
+)
 from config import load_required_env
 from csv_validation import print_dry_run, print_validation_result, validate_csv
-from browser_engine import run_import
+from browser_engine import generate_account_aliases, run_import
 
 
-ACCOUNT_ALIASES_FILE = "account_aliases.json"
+ACCOUNT_ALIASES_FILE = DEFAULT_ACCOUNT_ALIASES_FILE
 
 
 def build_account_url(account_id, option_name="--account-id"):
@@ -74,7 +78,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="MoneyForwardへCSVデータを登録します。"
     )
-    parser.add_argument("input_file", help="読み込むCSVファイル")
+    parser.add_argument("input_file", nargs="?", help="読み込むCSVファイル")
     account_group = parser.add_mutually_exclusive_group()
     account_group.add_argument(
         "--account-id",
@@ -100,6 +104,24 @@ def parse_args():
         action="store_true",
         help="CSV検証だけを行います。MoneyForwardへは接続しません。",
     )
+    parser.add_argument(
+        "--generate-account-aliases",
+        action="store_true",
+        help=(
+            "MoneyForwardの手入力口座一覧からaccount_aliases.jsonを生成します。"
+            "CSVファイルは不要です。"
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        default=ACCOUNT_ALIASES_FILE,
+        help="--generate-account-aliasesの出力先です。未指定時はaccount_aliases.jsonです。",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="--generate-account-aliasesで既存の出力先を上書きします。",
+    )
     return parser.parse_args()
 
 
@@ -108,6 +130,44 @@ def main():
     if args.dry_run and args.validate_only:
         print("--dry-run and --validate-only cannot be used together.", file=sys.stderr)
         return 1
+    if args.generate_account_aliases and (
+        args.input_file is not None
+        or args.account_id is not None
+        or args.account is not None
+        or args.dry_run
+        or args.validate_only
+    ):
+        print(
+            "--generate-account-aliases cannot be combined with CSV import options.",
+            file=sys.stderr,
+        )
+        return 1
+    if not args.generate_account_aliases and (
+        args.output != ACCOUNT_ALIASES_FILE or args.force
+    ):
+        print(
+            "--output and --force can only be used with --generate-account-aliases.",
+            file=sys.stderr,
+        )
+        return 1
+    if not args.generate_account_aliases and args.input_file is None:
+        print(
+            "input_file is required unless --generate-account-aliases is used.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if args.generate_account_aliases:
+        try:
+            env = load_required_env(require_account_url=False)
+            aliases = generate_account_aliases(env)
+            write_account_aliases(aliases, args.output, force=args.force)
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        print("Generated " + args.output + " with " + str(len(aliases)) + " accounts.")
+        return 0
 
     account_url = None
     try:

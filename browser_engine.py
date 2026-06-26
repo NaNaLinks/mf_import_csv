@@ -39,3 +39,23 @@ def run_import(input_file, entries, env):
         return
 
     raise AssertionError("unreachable browser engine: " + engine)
+
+
+def generate_account_aliases(env):
+    engine = get_browser_engine(env)
+
+    if engine == "selenium":
+        from moneyforward_importer import (
+            generate_account_aliases as generate_selenium_account_aliases,
+        )
+
+        return generate_selenium_account_aliases(env)
+
+    if engine == "playwright":
+        from moneyforward_importer_playwright import (
+            generate_account_aliases as generate_playwright_account_aliases,
+        )
+
+        return generate_playwright_account_aliases(env)
+
+    raise AssertionError("unreachable browser engine: " + engine)
