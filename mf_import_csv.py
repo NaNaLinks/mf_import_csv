@@ -8,6 +8,7 @@ from account_aliases_generator import (
     write_account_aliases,
 )
 from config import load_required_env
+from config_setup import run_setup, run_show_config
 from csv_validation import print_dry_run, print_validation_result, validate_csv
 from browser_engine import generate_account_aliases, run_import
 
@@ -79,6 +80,25 @@ def parse_args():
         description="MoneyForwardへCSVデータを登録します。"
     )
     parser.add_argument("input_file", nargs="?", help="読み込むCSVファイル")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--setup",
+        action="store_true",
+        help=".envを対話形式で作成します。CSVファイルは不要です。",
+    )
+    mode_group.add_argument(
+        "--show-config",
+        action="store_true",
+        help=".envの設定状態を安全に表示します。CSVファイルは不要です。",
+    )
+    mode_group.add_argument(
+        "--generate-account-aliases",
+        action="store_true",
+        help=(
+            "MoneyForwardの手入力口座一覧からaccount_aliases.jsonを生成します。"
+            "CSVファイルは不要です。"
+        ),
+    )
     account_group = parser.add_mutually_exclusive_group()
     account_group.add_argument(
         "--account-id",
@@ -105,14 +125,6 @@ def parse_args():
         help="CSV検証だけを行います。MoneyForwardへは接続しません。",
     )
     parser.add_argument(
-        "--generate-account-aliases",
-        action="store_true",
-        help=(
-            "MoneyForwardの手入力口座一覧からaccount_aliases.jsonを生成します。"
-            "CSVファイルは不要です。"
-        ),
-    )
-    parser.add_argument(
         "--output",
         default=ACCOUNT_ALIASES_FILE,
         help="--generate-account-aliasesの出力先です。未指定時はaccount_aliases.jsonです。",
@@ -127,6 +139,20 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if (args.setup or args.show_config) and (
+        args.input_file is not None
+        or args.account_id is not None
+        or args.account is not None
+        or args.dry_run
+        or args.validate_only
+        or args.output != ACCOUNT_ALIASES_FILE
+        or args.force
+    ):
+        print(
+            "--setup and --show-config cannot be combined with CSV import options.",
+            file=sys.stderr,
+        )
+        return 1
     if args.dry_run and args.validate_only:
         print("--dry-run and --validate-only cannot be used together.", file=sys.stderr)
         return 1
@@ -150,9 +176,22 @@ def main():
             file=sys.stderr,
         )
         return 1
+    if args.setup:
+        try:
+            run_setup()
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        return 0
+
+    if args.show_config:
+        run_show_config()
+        return 0
+
     if not args.generate_account_aliases and args.input_file is None:
         print(
-            "input_file is required unless --generate-account-aliases is used.",
+            "input_file is required unless --setup, --show-config, or "
+            "--generate-account-aliases is used.",
             file=sys.stderr,
         )
         return 1

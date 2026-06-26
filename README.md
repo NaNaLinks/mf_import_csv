@@ -17,6 +17,7 @@
 - CLI引数による手入力口座ID指定
 - CLI引数による手入力口座エイリアス指定
 - MoneyForwardの手入力口座一覧からの口座エイリアス設定生成
+- `.env` 設定の対話作成と安全な設定確認
 
 ## 必要な環境
 
@@ -57,6 +58,21 @@ python -m playwright install chromium
    ```sh
    cp .env.example .env
    ```
+   MacやLinuxでは、`.` で始まる `.env` や `.env.example` はGUI上で隠しファイルとして扱われることがあります。直接ファイルを探して編集しづらい場合は、次のコマンドで対話形式の初期設定を実行できます。
+
+   ```sh
+   python mf_import_csv.py --setup
+   ```
+
+   `--setup` はCSVファイルなしで実行できます。既に `.env` が存在する場合は、デフォルトでは上書きせずに終了します。パスワード入力には画面表示されない入力方式を使います。
+
+   現在の設定状態は、次のコマンドで確認できます。
+
+   ```sh
+   python mf_import_csv.py --show-config
+   ```
+
+   `--show-config` もCSVファイルなしで実行できます。パスワードは表示せず、インポート先口座URLも実値ではなく設定済みかどうかだけを表示します。
 2. `.env` に、マネーフォワードのユーザー名、パスワード、インポート先の口座URLを指定してください。
    - `MF_IMPORT_CSV_ACCOUNT_URL`: インポート先の口座URL。`--account-id` 指定時は省略できます。
    - `MF_IMPORT_CSV_USER`: MoneyForwardログインユーザー
