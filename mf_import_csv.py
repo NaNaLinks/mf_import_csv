@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-from config import load_required_env
+from config import load_required_env, show_config, write_setup_env
 from csv_validation import print_dry_run, print_validation_result, validate_csv
 from browser_engine import run_import
 
@@ -74,7 +74,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="MoneyForwardへCSVデータを登録します。"
     )
-    parser.add_argument("input_file", help="読み込むCSVファイル")
+    parser.add_argument("input_file", nargs="?", help="読み込むCSVファイル")
     account_group = parser.add_mutually_exclusive_group()
     account_group.add_argument(
         "--account-id",
@@ -100,11 +100,35 @@ def parse_args():
         action="store_true",
         help="CSV検証だけを行います。MoneyForwardへは接続しません。",
     )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help=".envを対話形式で作成します。既存.envは上書きしません。",
+    )
+    parser.add_argument(
+        "--show-config",
+        action="store_true",
+        help="現在の.env設定状態を安全に表示します。",
+    )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    if args.setup and args.show_config:
+        print("--setup and --show-config cannot be used together.", file=sys.stderr)
+        return 1
+
+    if args.setup:
+        return write_setup_env()
+
+    if args.show_config:
+        return show_config()
+
+    if args.input_file is None:
+        print("input_file is required unless --setup or --show-config is used.", file=sys.stderr)
+        return 1
+
     if args.dry_run and args.validate_only:
         print("--dry-run and --validate-only cannot be used together.", file=sys.stderr)
         return 1

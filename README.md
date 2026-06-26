@@ -16,6 +16,8 @@
 - Selenium / Playwright のブラウザエンジン切替
 - CLI引数による手入力口座ID指定
 - CLI引数による手入力口座エイリアス指定
+- 対話形式による `.env` 作成
+- `.env` 設定状態の安全な確認
 
 ## 必要な環境
 
@@ -51,7 +53,26 @@ python -m playwright install chromium
 
 ## 実行方法
 
-1. `.env.example` をコピーして `.env` を作成してください。
+1. `.env` を作成してください。
+
+   MacやLinuxでは、`.env` や `.env.example` のようなドット始まりのファイルはGUI上で隠しファイルとして扱われ、Finderなどから見つけにくい場合があります。直接ファイルを探して編集しなくても、以下のコマンドで対話形式の初期設定を実行できます。
+
+   ```sh
+   python mf_import_csv.py --setup
+   ```
+
+   `--setup` はMoneyForwardログインユーザー、パスワード、インポート先口座URL、ブラウザ設定を順番に入力し、`.env` を作成します。パスワード入力には可能な限り非表示入力を使います。既に `.env` が存在する場合は、デフォルトでは上書きせずに終了します。
+
+   現在の設定状態は以下のコマンドで確認できます。
+
+   ```sh
+   python mf_import_csv.py --show-config
+   ```
+
+   `--show-config` はパスワードや秘密情報をそのまま表示せず、設定済みか未設定かを表示します。設定値の実内容を共有したり、README、レポート、PR本文、Git管理対象ファイルへ貼らないでください。
+
+   手動で作成する場合は、`.env.example` をコピーして `.env` を作成してください。
+
    ```sh
    cp .env.example .env
    ```
