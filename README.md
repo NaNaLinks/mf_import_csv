@@ -1,290 +1,343 @@
-# マネーフォワードにCSVデータを自動で取り込むスクリプト
+# MF CSVインポート
 
-## 概要
+Money Forwardの手入力口座へ、CSVの取引データをブラウザ操作で登録するための支援ツールです。
 
-このスクリプトは、**Selenium** または **Playwright** を使用してCSVデータをマネーフォワードに自動で取り込むPythonスクリプトです。
+## 1. 概要
 
-## 機能
+このアプリは、CSVファイルを検証し、SeleniumまたはPlaywrightでMoney Forwardの手入力口座ページを開いて、取引を1件ずつ登録します。
 
-- Chromeブラウザを起動
-- マネーフォワードにログインして登録する口座のページを開く
-- CSVファイルを読み込み、各取引データを入力
-- 入力内容を保存（テストモードでは保存せずに閉じる）
-- CSV検証
-- dry-runによる登録予定内容の確認
-- validate-onlyによるCSV検証のみの実行
-- Selenium / Playwright のブラウザエンジン切替
-- CLI引数による手入力口座ID指定
-- CLI引数による手入力口座エイリアス指定
-- MoneyForwardの手入力口座一覧からの口座エイリアス設定生成
-- `.env` 設定の対話作成と安全な設定確認
+推奨する流れは次の通りです。
 
-## 必要な環境
+1. `--setup` でログイン情報とブラウザ設定を登録する。
+2. 必要に応じて `--generate-account-aliases` で手入力口座の一覧から `account_aliases.json` を作る。
+3. `--show-config` で設定状態を確認する。
+4. `--validate-only` または `--dry-run` でCSVを確認する。
+5. 問題がなければCSVを指定してインポートする。
 
-- **Python** 3.x
-- **Selenium** 4.6 以降（Selenium Managerを使用）
-- **Playwright**（Playwright engineを使う場合）
-- **Google Chrome** 最新版
-- **適切なCSVファイル**（Web版マネーフォワードのCSVエクスポート機能で取得してください）
+実登録を行う通常実行ではMoney Forwardへログインし、登録ボタンを押します。事前確認には、Money Forwardへ接続しない `--validate-only` または `--dry-run` を使ってください。
 
-## インストール
+## 2. セットアップ手順
 
-以下のコマンドを実行して必要なライブラリをインストールしてください。
+### 2.1 リポジトリを取得する
 
 ```sh
-pip install -r requirements.txt
+git clone https://github.com/NaNaLinks/mf_import_csv.git
+cd mf_import_csv
 ```
 
-Playwright engineを使う場合は、Playwright用ブラウザもインストールしてください。
+### 2.2 Python環境を用意する
+
+Python 3系を使います。仮想環境を使う場合の例です。
 
 ```sh
-python -m playwright install chromium
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-## ファイル構成
+依存パッケージは次の通りです。
 
-- `mf_import_csv.py`: CLI入口と実行制御
-- `csv_validation.py`: CSV検証とdry-run表示
-- `config.py`: `.env` 読み込みと必須環境変数チェック
-- `browser_engine.py`: ブラウザエンジン選択
-- `moneyforward_importer.py`: Seleniumを使ったマネーフォワード画面操作
-- `moneyforward_importer_playwright.py`: Playwrightを使ったマネーフォワード画面操作
-- `account_aliases_generator.py`: 手入力口座リンクの抽出とエイリアス設定生成
-- `account_aliases.example.json`: 口座エイリアス設定のサンプル
+- `selenium`
+- `python-dotenv`
+- `playwright`
 
-## 実行方法
+### 2.3 ブラウザ操作に必要な準備
 
-1. `.env.example` をコピーして `.env` を作成してください。
-   ```sh
-   cp .env.example .env
-   ```
-   MacやLinuxでは、`.` で始まる `.env` や `.env.example` はGUI上で隠しファイルとして扱われることがあります。直接ファイルを探して編集しづらい場合は、次のコマンドで対話形式の初期設定を実行できます。
+Seleniumは既定のブラウザエンジンです。ローカルにインストールされたGoogle Chromeを使う運用が基本です。
 
-   ```sh
-   python mf_import_csv.py --setup
-   ```
-
-   `--setup` はCSVファイルなしで実行できます。既に `.env` が存在する場合は、デフォルトでは上書きせずに終了します。パスワード入力には画面表示されない入力方式を使います。
-
-   現在の設定状態は、次のコマンドで確認できます。
-
-   ```sh
-   python mf_import_csv.py --show-config
-   ```
-
-   `--show-config` もCSVファイルなしで実行できます。パスワードは表示せず、インポート先口座URLも実値ではなく設定済みかどうかだけを表示します。
-2. `.env` に、マネーフォワードのユーザー名、パスワード、インポート先の口座URLを指定してください。
-   - `MF_IMPORT_CSV_ACCOUNT_URL`: インポート先の口座URL。`--account-id` 指定時は省略できます。
-   - `MF_IMPORT_CSV_USER`: MoneyForwardログインユーザー
-   - `MF_IMPORT_CSV_PASSWORD`: MoneyForwardログインパスワード
-   - `MF_IMPORT_CSV_BROWSER_ENGINE`: `selenium` または `playwright`（未指定時は `selenium`）
-   - `MF_IMPORT_CSV_BROWSER_HEADLESS`: `true` または `false`（未指定時は `false`）
-   - `MF_IMPORT_CSV_BROWSER_CHANNEL`: `chromium`、`chrome`、`msedge` など
-   - `MF_IMPORT_CSV_REUSE_LOGIN_SESSION`: Playwrightでログイン済みブラウザ状態を再利用する場合は `true`（未指定時は `false`）
-   - `MF_IMPORT_CSV_BROWSER_PROFILE_DIR`: Playwrightのログイン状態保存先（未指定時は `.auth/moneyforward-playwright`）
-   - 例:
-   ```env
-   MF_IMPORT_CSV_ACCOUNT_URL="<インポート先の口座URL>"
-   MF_IMPORT_CSV_USER="<自分のアカウント>"
-   MF_IMPORT_CSV_PASSWORD="<自分のパスワード>"
-   MF_IMPORT_CSV_BROWSER_ENGINE="selenium"
-   MF_IMPORT_CSV_BROWSER_HEADLESS="false"
-   MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
-   MF_IMPORT_CSV_REUSE_LOGIN_SESSION="true"
-   MF_IMPORT_CSV_BROWSER_PROFILE_DIR=".auth/moneyforward-playwright"
-   ```
-   - 手入力口座IDをCLIで指定する場合は、`.env` の `MF_IMPORT_CSV_ACCOUNT_URL` より `--account-id` が優先されます。
-   - 口座エイリアスをCLIで指定する場合は、`.env` の `MF_IMPORT_CSV_ACCOUNT_URL` より `--account` が優先されます。
-   - `.env` はGit管理対象にしないでください。
-   - `account_aliases.json` は実口座IDを含み得るため、Git管理対象にしないでください。
-   - `.auth/` はログイン済みブラウザ状態を含むため、Git管理対象にしないでください。
-   - 認証情報やURLの実値は、コード、README、レポート、Git管理対象ファイルに含めないでください。
-3. CSVファイルをスクリプトと同じフォルダに配置する。
-    - Web版マネーフォワードのCSVエクスポート機能で取得できるCSVと同じフォーマットです。
-
-```
-[0] "計算対象", 
-[1] "日付", 
-[2] "内容", 
-[3] "金額（円）", 
-[4] "保有金融機関", 
-[5] "大項目", 
-[6] "中項目", 
-[7] "メモ", 
-[8] "振替", 
-[9] "ID"
-```
-
-4. スクリプトを実行
-
-```sh
-python mf_import_csv.py data.csv
-```
-
-- `data.csv` はインポートするCSVファイルのパスです。
-- 通常実行ではCSV検証後にマネーフォワードへログインし、登録処理を行います。
-- インポート先口座を手入力口座IDで指定する場合は、以下のように実行します。
-
-```sh
-python mf_import_csv.py data.csv --account-id 123456
-```
-
-`--account-id` は `https://moneyforward.com/accounts/show_manual/123456` のような口座URLに変換され、`.env` の `MF_IMPORT_CSV_ACCOUNT_URL` より優先されます。
-
-インポート先口座をエイリアスで指定する場合は、`account_aliases.example.json` をコピーして `account_aliases.json` を作成してください。
-
-```sh
-cp account_aliases.example.json account_aliases.json
-```
-
-`account_aliases.json` には、口座エイリアスと手入力口座IDの対応をJSONで定義します。以下はダミー値の例です。実口座IDをREADME、レポート、PR本文、Git管理対象ファイルへ書かないでください。
-
-```json
-{
-  "cash": "123456",
-  "paypay": "234567",
-  "private-cash": "345678"
-}
-```
-
-作成後、以下のように実行できます。
-
-```sh
-python mf_import_csv.py data.csv --account cash
-```
-
-`--account` は `account_aliases.json` から口座IDを取得し、`https://moneyforward.com/accounts/show_manual/<口座ID>` の形式に変換されます。`--account` と `--account-id` は同時に指定できません。どちらも指定しない場合は、従来どおり `.env` の `MF_IMPORT_CSV_ACCOUNT_URL` を使います。
-
-### account_aliases.jsonを自動生成する
-
-MoneyForwardの手入力口座一覧から、`account_aliases.json` を生成できます。CSVファイルは不要です。
-
-```sh
-python mf_import_csv.py --generate-account-aliases
-```
-
-このモードではMoneyForwardへログインし、`https://moneyforward.com/accounts` のリンクから `/accounts/show_manual/<口座ID>` を含む手入力口座だけを抽出します。自動連携口座は対象にしません。
-
-既存の `account_aliases.json` がある場合、デフォルトでは上書きせずに終了します。別ファイルへ出力する場合は `--output` を使います。
-
-```sh
-python mf_import_csv.py --generate-account-aliases --output account_aliases.new.json
-```
-
-既存ファイルを上書きする場合だけ、明示的に `--force` を指定してください。
-
-```sh
-python mf_import_csv.py --generate-account-aliases --force
-```
-
-生成されるJSONには実口座IDが含まれます。`account_aliases.json` やログイン済みブラウザ状態を含む `.auth/` はGitへ追加しないでください。README、PR本文、レポートにも実口座IDや認証情報を書かないでください。
-
-## ブラウザエンジン設定
-
-### Seleniumを使う
-
-Seleniumは既定のブラウザエンジンです。未指定の場合もSeleniumを使います。
-
-```env
-MF_IMPORT_CSV_BROWSER_ENGINE="selenium"
-MF_IMPORT_CSV_BROWSER_HEADLESS="false"
-MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
-```
-
-現時点では、Selenium実装における `MF_IMPORT_CSV_BROWSER_CHANNEL` は主に将来拡張・説明用です。SeleniumではローカルにインストールされたGoogle Chromeを使う運用が基本です。
-
-### Playwrightを使う
-
-Playwrightを使う場合は、依存関係のインストール後にPlaywright用ブラウザをインストールしてください。
+Playwrightを使う場合は、Playwright用ブラウザをインストールします。
 
 ```sh
 python -m playwright install chromium
 ```
 
-```env
-MF_IMPORT_CSV_BROWSER_ENGINE="playwright"
-MF_IMPORT_CSV_BROWSER_HEADLESS="false"
-MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
-MF_IMPORT_CSV_REUSE_LOGIN_SESSION="true"
-MF_IMPORT_CSV_BROWSER_PROFILE_DIR=".auth/moneyforward-playwright"
-```
-
-`MF_IMPORT_CSV_BROWSER_CHANNEL` は、Playwrightでは特に意味があります。`chromium` はPlaywright同梱Chromiumを使う想定です。ローカルにGoogle Chromeがインストール済みの場合は `chrome`、Microsoft Edgeがインストール済みの場合は `msedge` を指定できます。
-
-`MF_IMPORT_CSV_REUSE_LOGIN_SESSION="true"` を指定すると、Playwrightは `MF_IMPORT_CSV_BROWSER_PROFILE_DIR` の専用ブラウザプロファイルを使います。初回実行時にログインや追加認証を済ませると、2回目以降はサービス側が承認済みと判断する限り、そのログイン状態を再利用します。サービス側が再確認を要求した場合は、従来どおり画面に従って認証コードを入力してください。
-
-保存先の `.auth/` にはログイン済みブラウザ状態が含まれます。中身を共有したり、Gitに追加したりしないでください。互換性を優先し、未指定時の `MF_IMPORT_CSV_REUSE_LOGIN_SESSION` は `false` です。
-
-## 実行環境別メモ
-
-### Windows / Mac
-
-通常のブラウザ画面を見ながら操作する場合は、以下のようにheadlessを無効にします。
-
-```env
-MF_IMPORT_CSV_BROWSER_HEADLESS="false"
-```
-
-SeleniumではローカルにインストールされたGoogle Chromeを使う運用が基本です。Playwrightでは `python -m playwright install chromium` で同梱Chromiumを入れ、`MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"` を使う構成を基本例にします。ローカルのChromeを使いたい場合は `MF_IMPORT_CSV_BROWSER_CHANNEL="chrome"` を指定します。
-
-### Ubuntu Server
-
-画面のないサーバーではheadless実行を使います。
-
-```env
-MF_IMPORT_CSV_BROWSER_ENGINE="playwright"
-MF_IMPORT_CSV_BROWSER_HEADLESS="true"
-MF_IMPORT_CSV_BROWSER_CHANNEL="chromium"
-```
-
-Ubuntu Serverでは、Playwright + 同梱Chromium + headlessを推奨例とします。サーバー上でブラウザと依存関係をインストールします。
+画面のないUbuntu Serverなどでは、必要なOS依存パッケージも含めてインストールします。
 
 ```sh
 python -m playwright install --with-deps chromium
 ```
 
-Seleniumを使う場合は、サーバーにGoogle ChromeまたはChromiumと、Selenium Managerが利用できる実行環境を用意してください。サーバー運用では、通常実行前に必ず `--validate-only` または `--dry-run` でCSV内容を確認してください。
+### 2.4 設定ファイルを準備する
 
-## 事前確認
-
-通常実行前に、`--dry-run` または `--validate-only` でCSVを確認することを推奨します。
-
-### dry-run
+Macでは `.env` のような隠しファイルをGUIで見つけにくいため、通常は対話式セットアップを使ってください。
 
 ```sh
-python mf_import_csv.py data.csv --dry-run
+python mf_import_csv.py --setup
 ```
 
-`--dry-run` はCSV検証を行い、登録予定の内容と件数を表示します。マネーフォワードへのログイン、ブラウザ起動、登録処理は行いません。
+`--setup` はCSVファイルなしで実行できます。既に `.env` がある場合は上書きせずに終了します。パスワード入力は画面表示されません。
 
-### validate-only
+手動で作成する場合は、`.env.example` をコピーして `.env` を編集します。
+
+```sh
+cp .env.example .env
+```
+
+設定できる項目は次の通りです。
+
+| 設定キー | 用途 | 補足 |
+| --- | --- | --- |
+| `MF_IMPORT_CSV_ACCOUNT_URL` | 既定のインポート先口座URL | `--account-id` または `--account` 指定時は省略できます。 |
+| `MF_IMPORT_CSV_USER` | Money Forwardログインユーザー | 必須です。 |
+| `MF_IMPORT_CSV_PASSWORD` | Money Forwardログインパスワード | 必須です。 |
+| `MF_IMPORT_CSV_BROWSER_ENGINE` | ブラウザエンジン | `selenium` または `playwright`。未指定時は `selenium`。 |
+| `MF_IMPORT_CSV_BROWSER_HEADLESS` | headless実行 | `true` / `false`。未指定時は `false`。 |
+| `MF_IMPORT_CSV_BROWSER_CHANNEL` | Playwrightのブラウザチャンネル | `chromium`、`chrome`、`msedge` など。 |
+| `MF_IMPORT_CSV_REUSE_LOGIN_SESSION` | Playwrightのログイン状態再利用 | 未指定時は `false`。 |
+| `MF_IMPORT_CSV_BROWSER_PROFILE_DIR` | Playwrightのプロファイル保存先 | 未指定時は `.auth/moneyforward-playwright`。 |
+
+設定状態は次のコマンドで確認できます。
+
+```sh
+python mf_import_csv.py --show-config
+```
+
+`--show-config` はパスワードを表示せず、インポート先口座URLも実値ではなく設定済みかどうかだけを表示します。
+
+### 2.5 Git管理しないファイル
+
+次のファイルやディレクトリには認証情報、実口座ID、ログイン済みブラウザ状態が含まれる可能性があります。Gitへ追加しないでください。
+
+- `.env`
+- `.auth/`
+- `account_aliases.json`
+
+### 2.6 初回実行前の確認
+
+初回実行前に次を確認してください。
+
+- `.env` が作成済みで、`--show-config` で必要項目が設定済みになっている。
+- インポート先が `.env` の `MF_IMPORT_CSV_ACCOUNT_URL`、`--account-id`、`--account` のどれで決まるか把握している。
+- CSVが後述のフォーマットに合っている。
+- 実登録前に `--validate-only` または `--dry-run` が成功している。
+- Playwrightでログイン状態を再利用する場合、`.auth/` を共有したりGitへ追加したりしない。
+
+## 3. 使い方（推奨）
+
+### 3.1 ユーザーアカウントの登録手順
+
+対話式セットアップを実行します。
+
+```sh
+python mf_import_csv.py --setup
+```
+
+入力する主な内容は、Money Forwardログインユーザー、パスワード、既定のインポート先口座URL、ブラウザエンジン、headless設定です。
+
+登録後は設定状態を確認します。
+
+```sh
+python mf_import_csv.py --show-config
+```
+
+`MF_IMPORT_CSV_PASSWORD` は `設定済み（非表示）` と表示されます。`MF_IMPORT_CSV_ACCOUNT_URL` は実URLを表示せず、設定済みかどうかだけを表示します。
+
+### 3.2 口座の取得
+
+インポート先口座は、次のいずれかで指定します。
+
+| 指定方法 | 優先度 | 説明 |
+| --- | --- | --- |
+| `--account` | 高 | `account_aliases.json` のエイリアスから手入力口座IDを引きます。 |
+| `--account-id` | 中 | 手入力口座IDを直接指定します。 |
+| `MF_IMPORT_CSV_ACCOUNT_URL` | 低 | `.env` の既定URLを使います。 |
+
+手入力口座のエイリアスファイルは、Money Forwardの口座一覧から生成できます。
+
+```sh
+python mf_import_csv.py --generate-account-aliases
+```
+
+このコマンドはMoney Forwardへログインし、`https://moneyforward.com/accounts` にある `/accounts/show_manual/<口座ID>` のリンクから手入力口座だけを抽出して `account_aliases.json` を作成します。自動連携口座は対象にしません。
+
+既に `account_aliases.json` がある場合は上書きしません。別ファイルへ出力する場合は `--output` を使います。
+
+```sh
+python mf_import_csv.py --generate-account-aliases --output account_aliases.new.json
+```
+
+既存ファイルを上書きする場合だけ、明示的に `--force` を付けます。
+
+```sh
+python mf_import_csv.py --generate-account-aliases --force
+```
+
+エイリアスを使う場合は、次のように実行します。
+
+```sh
+python mf_import_csv.py data.csv --account cash
+```
+
+手入力口座IDを直接指定する場合は、次のように実行します。
+
+```sh
+python mf_import_csv.py data.csv --account-id 123456
+```
+
+`--account` と `--account-id` は同時に指定できません。
+
+### 3.3 インポート手順
+
+まずCSV検証だけを実行します。Money Forwardへの接続、ログイン、ブラウザ起動、登録処理は行いません。
 
 ```sh
 python mf_import_csv.py data.csv --validate-only
 ```
 
-`--validate-only` はCSV検証のみを行います。マネーフォワードへのログイン、ブラウザ起動、登録処理は行いません。
+次にdry-runで登録予定内容を確認します。dry-runもMoney Forwardへ接続しません。
 
-### CSV検証内容
+```sh
+python mf_import_csv.py data.csv --dry-run
+```
 
-以下を確認します。
+問題がなければインポートを実行します。
 
-- CSVファイルが存在すること
-- CSVが読み込めること
-- 各データ行に必要な列数があること
-- 日付列が `YYYY/MM/DD` 形式として妥当であること
-- 金額列が整数として扱えること
-- 金額が `0` ではないこと
+```sh
+python mf_import_csv.py data.csv --account cash
+```
 
-ヘッダー行、コメント行、計算対象が `0` の行はスキップします。検証エラーがある場合、通常実行でもマネーフォワードへ接続せずに終了します。
+通常実行では、CSV検証に成功した後、Money Forwardへログインしてインポート先口座ページを開きます。各取引について「手入力」フォームを開き、日付、金額、カテゴリ、内容を入力して保存します。
 
-## 注意点
+実行前に、次を確認してください。
 
-- `time.sleep` を適宜調整することで、環境に合わせて動作を安定させられます。
-- マネーフォワードのUI変更により、要素のIDやクラスが変わる可能性があります。
-- 本スクリプトの使用は自己責任でお願いします。本スクリプトを使用したことによるいかなる損害についても、作者は責任を負いません。
-- 本スクリプトは個人による開発であり、マネーフォワードとは一切関係ありません。
-- 自動化ツールの利用は、マネーフォワードの利用規約に違反しないように注意してください。
+- dry-runの対象件数、支出/収入、日付、金額、カテゴリが想定通りである。
+- `--account`、`--account-id`、`.env` のどれでインポート先口座が決まるか確認済みである。
+- カテゴリ名がMoney Forward画面上の大項目・中項目と一致している。
+- 2段階認証や追加認証が表示された場合に、ブラウザ上で対応できる状態である。
+
+## 4. インポートCSVのフォーマット
+
+CSVはUTF-8で読み込みます。データ行には少なくとも10列が必要です。
+
+| 列番号 | 列名 | 必須 | 使われ方 |
+| --- | --- | --- | --- |
+| 0 | 計算対象 | 必須 | `#`、`0`、`計算対象` の行はスキップします。それ以外を登録対象にします。 |
+| 1 | 日付 | 必須 | `YYYY/MM/DD` 形式として検証し、Money Forwardの日時欄へ入力します。 |
+| 2 | 内容 | 必須 | Money Forwardの内容欄へ入力します。 |
+| 3 | 金額（円） | 必須 | 整数として検証します。正の値は収入、負の値は支出です。0はエラーです。 |
+| 4 | 保有金融機関 | 任意 | 現在の登録処理では入力に使いません。 |
+| 5 | 大項目 | 任意 | `未分類` 以外の場合、Money Forwardの大項目として選択します。 |
+| 6 | 中項目 | 任意 | `未分類` 以外の場合、Money Forwardの中項目として選択します。先頭が `'` の場合は外して選択します。 |
+| 7 | メモ | 任意 | 内容欄に `内容（メモ）` の形で連結します。空なら内容だけを使います。 |
+| 8 | 振替 | 任意 | 現在の登録処理では入力に使いません。 |
+| 9 | ID | 任意 | 現在の登録処理では入力に使いません。 |
+
+Money Forwardへの登録項目との対応は次の通りです。
+
+| Money Forward側の項目 | CSVまたは設定からの入力 |
+| --- | --- |
+| 登録先口座 | `--account`、`--account-id`、または `MF_IMPORT_CSV_ACCOUNT_URL` で決定します。 |
+| 支出/収入 | `金額（円）` が正なら収入、負なら支出です。 |
+| 日付 | CSVの `日付`。 |
+| 金額 | CSVの `金額（円）` の絶対値。 |
+| 大項目 | CSVの `大項目`。`未分類` の場合は選択しません。 |
+| 中項目 | CSVの `中項目`。`未分類` の場合は選択しません。 |
+| 内容 | CSVの `内容` と `メモ`。最大50文字に切り詰めます。 |
+
+サンプルCSVです。
+
+```csv
+計算対象,日付,内容,金額（円）,保有金融機関,大項目,中項目,メモ,振替,ID
+1,2026/06/01,コンビニ,-580,現金,食費,食料品,昼食,,sample-001
+1,2026/06/02,売上,12000,現金,収入,事業収入,イベント,,sample-002
+0,2026/06/03,対象外,-1000,現金,未分類,未分類,,,sample-003
+```
+
+この例では、1行目はヘッダーとしてスキップされ、`計算対象` が `1` の2件だけが登録対象です。`計算対象` が `0` の行はスキップされます。
+
+dry-runでは、登録対象ごとに次のような情報が表示されます。
+
+```text
+[2] 支出 2026/06/01 -580 内容: コンビニ 大項目: 食費 中項目: 食料品
+[3] 収入 2026/06/02 12000 内容: 売上 大項目: 収入 中項目: 事業収入
+Summary:
+- target: 2
+- skipped: 2
+- errors: 0
+- warnings: 0
+```
+
+CSV検証では次を確認します。
+
+- CSVファイルが存在すること。
+- CSVがUTF-8で読み込めること。
+- 各データ行に10列以上あること。
+- 日付が `YYYY/MM/DD` 形式として妥当であること。
+- 金額が整数であること。
+- 金額が `0` ではないこと。
+
+検証エラーがある場合、通常実行でもMoney Forwardへ接続せずに終了します。
+
+## 5. コマンド一覧
+
+| コマンド | 用途 | 実行例 |
+| --- | --- | --- |
+| `--setup` | `.env` を対話形式で作成します。 | `python mf_import_csv.py --setup` |
+| `--show-config` | 現在の設定状態を安全に表示します。 | `python mf_import_csv.py --show-config` |
+| `--generate-account-aliases` | Money Forwardの手入力口座一覧から `account_aliases.json` を生成します。 | `python mf_import_csv.py --generate-account-aliases` |
+| `--generate-account-aliases --output` | 口座エイリアスを指定ファイルへ出力します。 | `python mf_import_csv.py --generate-account-aliases --output account_aliases.new.json` |
+| `--generate-account-aliases --force` | 既存の出力先を上書きして口座エイリアスを生成します。 | `python mf_import_csv.py --generate-account-aliases --force` |
+| `--validate-only` | CSV検証だけを行います。Money Forwardへ接続しません。 | `python mf_import_csv.py data.csv --validate-only` |
+| `--dry-run` | CSVを検証し、登録予定内容だけを表示します。Money Forwardへ接続しません。 | `python mf_import_csv.py data.csv --dry-run` |
+| `--account-id` | 手入力口座IDを直接指定してインポートします。 | `python mf_import_csv.py data.csv --account-id 123456` |
+| `--account` | `account_aliases.json` のエイリアスで口座を指定してインポートします。 | `python mf_import_csv.py data.csv --account cash` |
+| 通常インポート | `.env` の `MF_IMPORT_CSV_ACCOUNT_URL` を使ってインポートします。 | `python mf_import_csv.py data.csv` |
+
+補足:
+
+- `--setup`、`--show-config`、`--generate-account-aliases` は相互排他です。
+- `--dry-run` と `--validate-only` は同時に使えません。
+- `--output` と `--force` は `--generate-account-aliases` と一緒に使う場合だけ有効です。
+- `--account` と `--account-id` は同時に使えません。
+
+## 6. よくある注意点
+
+### `.env` が見つからない
+
+`.env` は隠しファイルです。MacのFinderなどで見えない場合は、`--setup` を使うか、ターミナルで確認してください。
+
+```sh
+ls -la
+```
+
+`.env` がない状態で通常インポートや口座取得を実行すると、必要な環境変数が不足して終了します。
+
+### `.env` を作り直したい
+
+`--setup` は既存の `.env` を上書きしません。変更したい場合は、既存の `.env` を手動で編集するか、バックアップしてから作り直してください。
+
+### ログインに失敗する
+
+`--show-config` で `MF_IMPORT_CSV_USER` と `MF_IMPORT_CSV_PASSWORD` が設定済みか確認してください。2段階認証や追加認証が表示された場合は、画面の案内に従ってコードを入力します。
+
+Playwrightで `MF_IMPORT_CSV_REUSE_LOGIN_SESSION="true"` を使う場合、初回ログイン後のブラウザ状態は `MF_IMPORT_CSV_BROWSER_PROFILE_DIR` に保存されます。サービス側が再確認を求めた場合は、再度認証が必要です。
+
+### 口座IDが分からない
+
+手入力口座を使う場合は、`--generate-account-aliases` で `account_aliases.json` を生成し、口座名からエイリアス指定するのが基本です。生成されるJSONには実口座IDが含まれるため、Gitへ追加しないでください。
+
+### CSV形式エラーが出る
+
+`--validate-only` でエラー内容を確認してください。よくある原因は、列数不足、日付形式の誤り、金額が整数ではない、金額が0になっている、UTF-8以外の文字コードになっている、などです。
+
+### カテゴリが選択できない
+
+CSVの `大項目` と `中項目` はMoney Forward画面上のリンクテキストと一致している必要があります。`未分類` の場合はカテゴリ選択をスキップします。
+
+### Money Forward画面が変わった
+
+このツールはMoney Forwardの画面要素を使って操作します。Money Forward側のUI変更により、ボタン、入力欄、カテゴリ選択が見つからなくなる可能性があります。
+
+### 実行前に安全確認したい
+
+通常インポートの前に、必ず次のどちらかを実行してください。
+
+```sh
+python mf_import_csv.py data.csv --validate-only
+python mf_import_csv.py data.csv --dry-run
+```
+
+どちらもMoney Forwardへの接続や登録処理は行いません。
 
 ## ライセンス
 
