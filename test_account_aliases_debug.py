@@ -30,6 +30,16 @@ class AccountAliasesDebugTest(unittest.TestCase):
                             "container_text": "財布\n残高",
                         }
                     ],
+                    alias_candidates=[
+                        {
+                            "index": 1,
+                            "href": "/accounts/show_manual/123456",
+                            "account_id": "123456",
+                            "account_name": "財布",
+                            "status": "accepted",
+                            "reason": "",
+                        }
+                    ],
                     screenshot_func=lambda path: Path(path).write_bytes(b"png"),
                 )
 
@@ -50,6 +60,12 @@ class AccountAliasesDebugTest(unittest.TestCase):
                     "href: /accounts/show_manual/123456",
                     (debug_dir / "links.txt").read_text(encoding="utf_8"),
                 )
+                account_candidates = (debug_dir / "account_candidates.txt").read_text(
+                    encoding="utf_8"
+                )
+                self.assertIn("candidate_count: 1", account_candidates)
+                self.assertIn("accepted_count: 1", account_candidates)
+                self.assertIn("財布 => 123456", account_candidates)
                 self.assertIn(
                     "browser_engine: playwright",
                     (debug_dir / "runtime.txt").read_text(encoding="utf_8"),

@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 from account_aliases_generator import (
+    describe_manual_account_link_candidates,
     extract_manual_account_aliases,
     write_account_aliases,
 )
@@ -53,6 +54,22 @@ class AccountAliasesGeneratorTest(unittest.TestCase):
 
         self.assertEqual(aliases, {"事業用現金": "234567"})
 
+    def test_extract_manual_account_aliases_accepts_opaque_account_id(self):
+        aliases = extract_manual_account_aliases(
+            [
+                {
+                    "href": "/accounts/show_manual/AGAae-NFSCeRVSfebWilZNpNI-NFwiDqkNg_TKMOU",
+                    "text": "財布",
+                    "container_text": "",
+                },
+            ]
+        )
+
+        self.assertEqual(
+            aliases,
+            {"財布": "AGAae-NFSCeRVSfebWilZNpNI-NFwiDqkNg_TKMOU"},
+        )
+
     def test_extract_manual_account_aliases_uses_container_text_when_link_text_is_empty(self):
         aliases = extract_manual_account_aliases(
             [
@@ -82,6 +99,28 @@ class AccountAliasesGeneratorTest(unittest.TestCase):
                     },
                 ]
             )
+
+    def test_describe_manual_account_link_candidates_reports_status(self):
+        candidates = describe_manual_account_link_candidates(
+            [
+                {
+                    "href": "/accounts/show_manual/opaque_123-ABC",
+                    "text": "財布",
+                    "container_text": "",
+                },
+                {
+                    "href": "/accounts/show/999999",
+                    "text": "自動連携口座",
+                    "container_text": "",
+                },
+            ]
+        )
+
+        self.assertEqual(candidates[0]["status"], "accepted")
+        self.assertEqual(candidates[0]["account_id"], "opaque_123-ABC")
+        self.assertEqual(candidates[0]["account_name"], "財布")
+        self.assertEqual(candidates[1]["status"], "rejected")
+        self.assertEqual(candidates[1]["reason"], "manual_account_href_not_matched")
 
     def test_write_account_aliases_does_not_overwrite_by_default(self):
         with tempfile.TemporaryDirectory() as temp_dir:
