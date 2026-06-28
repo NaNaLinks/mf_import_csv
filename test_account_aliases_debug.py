@@ -69,6 +69,44 @@ class AccountAliasesDebugTest(unittest.TestCase):
         self.assertIn("failed to get title", value)
         self.assertIn("RuntimeError", value)
 
+    def test_save_debug_info_returns_none_when_directory_creation_fails(self):
+        with patch(
+            "account_aliases_debug.create_debug_dir",
+            side_effect=OSError("cannot create"),
+        ):
+            debug_dir = save_account_aliases_debug_info(
+                engine="playwright",
+                env={},
+                error=ValueError("original"),
+                current_url="https://example.com",
+                title="title",
+                html="<html></html>",
+                link_items=[],
+            )
+
+        self.assertIsNone(debug_dir)
+
+    def test_debug_save_failure_does_not_replace_original_error(self):
+        with self.assertRaisesRegex(ValueError, "original error"):
+            try:
+                raise ValueError("original error")
+            except ValueError as exc:
+                with patch(
+                    "account_aliases_debug._write_text",
+                    side_effect=OSError("cannot write"),
+                ):
+                    debug_dir = save_account_aliases_debug_info(
+                        engine="selenium",
+                        env={},
+                        error=exc,
+                        current_url="https://example.com",
+                        title="title",
+                        html="<html></html>",
+                        link_items=[],
+                    )
+                self.assertIsNone(debug_dir)
+                raise
+
 
 if __name__ == "__main__":
     unittest.main()

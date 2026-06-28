@@ -75,6 +75,32 @@ def save_account_aliases_debug_info(
     link_items,
     screenshot_func=None,
 ):
+    try:
+        return _save_account_aliases_debug_info(
+            engine=engine,
+            env=env,
+            error=error,
+            current_url=current_url,
+            title=title,
+            html=html,
+            link_items=link_items,
+            screenshot_func=screenshot_func,
+        )
+    except Exception:
+        return None
+
+
+def _save_account_aliases_debug_info(
+    *,
+    engine,
+    env,
+    error,
+    current_url,
+    title,
+    html,
+    link_items,
+    screenshot_func=None,
+):
     debug_dir = create_debug_dir()
 
     _write_text(debug_dir / "current_url.txt", current_url)

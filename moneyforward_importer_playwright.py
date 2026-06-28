@@ -265,7 +265,10 @@ def generate_account_aliases(env):
                     link_items=link_items,
                     screenshot_func=lambda path: page.screenshot(path=path),
                 )
-                print("デバッグ情報を保存しました: " + str(debug_dir))
+                if debug_dir is not None:
+                    print("デバッグ情報を保存しました: " + str(debug_dir))
+                else:
+                    print("デバッグ情報の保存に失敗しました。")
                 raise
         finally:
             close_browser()
