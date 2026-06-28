@@ -101,6 +101,7 @@ python mf_import_csv.py --show-config
 - `.env`
 - `.auth/`
 - `account_aliases.json`
+- `logs/debug/`
 
 ### 2.6 初回実行前の確認
 
@@ -149,6 +150,8 @@ python mf_import_csv.py --generate-account-aliases
 ```
 
 このコマンドはMoney Forwardへログインし、`https://moneyforward.com/accounts` にある `/accounts/show_manual/<口座ID>` のリンクから手入力口座だけを抽出して `account_aliases.json` を作成します。自動連携口座は対象にしません。
+
+手入力口座リンクが見つからないなど、口座エイリアス生成に失敗した場合は、調査用ファイルを `logs/debug/generate-account-aliases_YYYYMMDD_HHMMSS/` に保存します。保存先はエラー時のログに表示されます。保存内容には現在URL、ページタイトル、スクリーンショット、HTML、リンク一覧、エラー内容、実行モード情報が含まれるため、必要な確認が終わったら共有や保管範囲に注意してください。
 
 既に `account_aliases.json` がある場合は上書きしません。別ファイルへ出力する場合は `--output` を使います。
 

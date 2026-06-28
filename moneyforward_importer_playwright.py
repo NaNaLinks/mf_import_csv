@@ -1,6 +1,7 @@
 import time
 from pathlib import Path
 
+from account_aliases_debug import safe_debug_value, save_account_aliases_debug_info
 from account_aliases_generator import extract_manual_account_aliases
 
 
@@ -250,7 +251,25 @@ def generate_account_aliases(env):
                 page.wait_for_load_state("networkidle", timeout=10000)
             except PlaywrightTimeoutError:
                 pass
-            return extract_manual_account_aliases(_collect_manual_account_links(page))
+            link_items = _collect_manual_account_links(page)
+            try:
+                return extract_manual_account_aliases(link_items)
+            except ValueError as exc:
+                debug_dir = save_account_aliases_debug_info(
+                    engine="playwright",
+                    env=env,
+                    error=exc,
+                    current_url=safe_debug_value("current_url", lambda: page.url),
+                    title=safe_debug_value("title", page.title),
+                    html=safe_debug_value("html", page.content),
+                    link_items=link_items,
+                    screenshot_func=lambda path: page.screenshot(path=path),
+                )
+                if debug_dir is not None:
+                    print("デバッグ情報を保存しました: " + str(debug_dir))
+                else:
+                    print("デバッグ情報の保存に失敗しました。")
+                raise
         finally:
             close_browser()
 

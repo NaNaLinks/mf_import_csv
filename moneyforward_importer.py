@@ -1,5 +1,6 @@
 import time
 
+from account_aliases_debug import safe_debug_value, save_account_aliases_debug_info
 from account_aliases_generator import extract_manual_account_aliases
 
 
@@ -135,7 +136,25 @@ def generate_account_aliases(env):
         WebDriverWait(driver, 15).until(
             lambda current_driver: "/accounts" in current_driver.current_url
         )
-        return extract_manual_account_aliases(_collect_manual_account_links(driver, By))
+        link_items = _collect_manual_account_links(driver, By)
+        try:
+            return extract_manual_account_aliases(link_items)
+        except ValueError as exc:
+            debug_dir = save_account_aliases_debug_info(
+                engine="selenium",
+                env=env,
+                error=exc,
+                current_url=safe_debug_value("current_url", lambda: driver.current_url),
+                title=safe_debug_value("title", lambda: driver.title),
+                html=safe_debug_value("html", lambda: driver.page_source),
+                link_items=link_items,
+                screenshot_func=lambda path: driver.save_screenshot(path),
+            )
+            if debug_dir is not None:
+                print("デバッグ情報を保存しました: " + str(debug_dir))
+            else:
+                print("デバッグ情報の保存に失敗しました。")
+            raise
     finally:
         if driver is not None:
             driver.quit()

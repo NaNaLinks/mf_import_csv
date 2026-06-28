@@ -1,4 +1,5 @@
 .env
 .auth/
+logs/debug/
 account_aliases.json
 __pycache__/
