@@ -34,6 +34,54 @@ def _format_links(link_items):
     return "\n".join(lines)
 
 
+def _format_account_candidates(alias_candidates):
+    if not alias_candidates:
+        return "candidate_count: 0\naccepted_count: 0\nrejected_count: 0\n"
+
+    accepted = [
+        item for item in alias_candidates if item.get("status", "") == "accepted"
+    ]
+    rejected = [
+        item for item in alias_candidates if item.get("status", "") != "accepted"
+    ]
+
+    lines = [
+        "candidate_count: " + str(len(alias_candidates)),
+        "accepted_count: " + str(len(accepted)),
+        "rejected_count: " + str(len(rejected)),
+        "",
+        "accepted:",
+    ]
+
+    if accepted:
+        for item in accepted:
+            lines.append(
+                "- "
+                + _safe_text(item.get("account_name", "")).strip()
+                + " => "
+                + _safe_text(item.get("account_id", "")).strip()
+                + " ("
+                + _safe_text(item.get("href", "")).strip()
+                + ")"
+            )
+    else:
+        lines.append("(none)")
+
+    lines.extend(["", "candidates:"])
+    for item in alias_candidates:
+        lines.append("[" + str(item.get("index", "")) + "]")
+        lines.append("status: " + _safe_text(item.get("status", "")).strip())
+        reason = _safe_text(item.get("reason", "")).strip()
+        if reason:
+            lines.append("reason: " + reason)
+        lines.append("account_name: " + _safe_text(item.get("account_name", "")).strip())
+        lines.append("account_id: " + _safe_text(item.get("account_id", "")).strip())
+        lines.append("href: " + _safe_text(item.get("href", "")).strip())
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _format_runtime_info(engine, env):
     return "\n".join(
         [
@@ -73,6 +121,7 @@ def save_account_aliases_debug_info(
     title,
     html,
     link_items,
+    alias_candidates=None,
     screenshot_func=None,
 ):
     try:
@@ -84,6 +133,7 @@ def save_account_aliases_debug_info(
             title=title,
             html=html,
             link_items=link_items,
+            alias_candidates=alias_candidates,
             screenshot_func=screenshot_func,
         )
     except Exception:
@@ -99,6 +149,7 @@ def _save_account_aliases_debug_info(
     title,
     html,
     link_items,
+    alias_candidates=None,
     screenshot_func=None,
 ):
     debug_dir = create_debug_dir()
@@ -107,6 +158,10 @@ def _save_account_aliases_debug_info(
     _write_text(debug_dir / "title.txt", title)
     _write_text(debug_dir / "page.html", html)
     _write_text(debug_dir / "links.txt", _format_links(link_items))
+    _write_text(
+        debug_dir / "account_candidates.txt",
+        _format_account_candidates(alias_candidates or []),
+    )
     _write_text(debug_dir / "runtime.txt", _format_runtime_info(engine, env))
     _write_text(
         debug_dir / "error.log",

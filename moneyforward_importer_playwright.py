@@ -2,7 +2,10 @@ import time
 from pathlib import Path
 
 from account_aliases_debug import safe_debug_value, save_account_aliases_debug_info
-from account_aliases_generator import extract_manual_account_aliases
+from account_aliases_generator import (
+    describe_manual_account_link_candidates,
+    extract_manual_account_aliases,
+)
 
 
 ACCOUNTS_URL = "https://moneyforward.com/accounts"
@@ -255,6 +258,7 @@ def generate_account_aliases(env):
             try:
                 return extract_manual_account_aliases(link_items)
             except ValueError as exc:
+                alias_candidates = describe_manual_account_link_candidates(link_items)
                 debug_dir = save_account_aliases_debug_info(
                     engine="playwright",
                     env=env,
@@ -263,6 +267,7 @@ def generate_account_aliases(env):
                     title=safe_debug_value("title", page.title),
                     html=safe_debug_value("html", page.content),
                     link_items=link_items,
+                    alias_candidates=alias_candidates,
                     screenshot_func=lambda path: page.screenshot(path=path),
                 )
                 if debug_dir is not None:

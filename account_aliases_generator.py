@@ -5,7 +5,9 @@ from urllib.parse import urlparse
 
 
 DEFAULT_ACCOUNT_ALIASES_FILE = "account_aliases.json"
-MANUAL_ACCOUNT_PATH_RE = re.compile(r"^/accounts/show_manual/([0-9]+)(?:[/?#].*)?$")
+MANUAL_ACCOUNT_PATH_RE = re.compile(
+    r"^/accounts/show_manual/([A-Za-z0-9_-]+)(?:[/?#].*)?$"
+)
 
 
 def _extract_account_id(href):
@@ -27,6 +29,53 @@ def _normalize_account_name(text):
 
     lines = [line.strip() for line in text.splitlines()]
     return next((line for line in lines if line), "")
+
+
+def describe_manual_account_link_candidates(link_items):
+    candidates = []
+    aliases = {}
+    seen_ids = set()
+
+    for index, item in enumerate(link_items, start=1):
+        href = item.get("href", "")
+        account_id = _extract_account_id(href)
+        account_name = _normalize_account_name(item.get("text", ""))
+        if not account_name:
+            account_name = _normalize_account_name(item.get("container_text", ""))
+
+        status = "accepted"
+        reason = ""
+        if account_id is None:
+            status = "rejected"
+            reason = "manual_account_href_not_matched"
+        elif account_id in seen_ids:
+            status = "rejected"
+            reason = "duplicate_account_id"
+        elif not account_name:
+            status = "rejected"
+            reason = "account_name_empty"
+        elif account_name in aliases and aliases[account_name] != account_id:
+            status = "rejected"
+            reason = "duplicate_account_name"
+
+        if status == "accepted":
+            aliases[account_name] = account_id
+            seen_ids.add(account_id)
+
+        candidates.append(
+            {
+                "index": index,
+                "href": href,
+                "text": item.get("text", ""),
+                "container_text": item.get("container_text", ""),
+                "account_id": account_id or "",
+                "account_name": account_name,
+                "status": status,
+                "reason": reason,
+            }
+        )
+
+    return candidates
 
 
 def extract_manual_account_aliases(link_items):
