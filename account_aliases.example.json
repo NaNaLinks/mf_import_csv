@@ -1,5 +1,17 @@
 {
-  "cash": "123456",
-  "paypay": "234567",
-  "private-cash": "345678"
+  "version": 1,
+  "accounts": [
+    {
+      "account_name": "サンプル現金",
+      "account_id": "123456",
+      "alias": "cash",
+      "alias_source": "auto"
+    },
+    {
+      "account_name": "サンプルPayPay",
+      "account_id": "234567",
+      "alias": "paypay",
+      "alias_source": "manual"
+    }
+  ]
 }
