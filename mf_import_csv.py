@@ -1,10 +1,14 @@
 import argparse
-import json
 import os
 import sys
 
 from account_aliases_generator import (
     DEFAULT_ACCOUNT_ALIASES_FILE,
+    alias_to_account_id_map,
+    load_account_aliases_data,
+    normalize_account_aliases_data,
+    set_account_alias,
+    validate_alias,
     write_account_aliases,
 )
 from config import load_required_env
@@ -31,34 +35,7 @@ def load_account_aliases(path=ACCOUNT_ALIASES_FILE):
             "Create it from account_aliases.example.json."
         )
 
-    try:
-        with open(path, mode="r", encoding="utf_8") as f:
-            aliases = json.load(f)
-    except json.JSONDecodeError as exc:
-        raise ValueError(path + " is not valid JSON: " + str(exc)) from exc
-    except OSError as exc:
-        raise ValueError("Could not read " + path + ": " + str(exc)) from exc
-
-    if not isinstance(aliases, dict):
-        raise ValueError(path + " must contain a JSON object of alias to account ID.")
-
-    normalized_aliases = {}
-    for alias, account_id in aliases.items():
-        if not isinstance(alias, str) or not isinstance(account_id, str):
-            raise ValueError(path + " aliases and account IDs must be strings.")
-
-        stripped_alias = alias.strip()
-        stripped_account_id = account_id.strip()
-        if not stripped_alias:
-            raise ValueError(path + " contains an empty alias.")
-        if not stripped_account_id:
-            raise ValueError(
-                path + " alias '" + stripped_alias + "' has an empty account ID."
-            )
-
-        normalized_aliases[stripped_alias] = stripped_account_id
-
-    return normalized_aliases
+    return alias_to_account_id_map(load_account_aliases_data(path))
 
 
 def resolve_account_alias(alias, path=ACCOUNT_ALIASES_FILE):
@@ -68,11 +45,59 @@ def resolve_account_alias(alias, path=ACCOUNT_ALIASES_FILE):
 
     aliases = load_account_aliases(path)
     if alias not in aliases:
+        available_aliases = ", ".join(sorted(aliases.keys()))
         raise ValueError(
-            "Account alias '" + alias + "' was not found in " + path + "."
+            "Account alias '"
+            + alias
+            + "' was not found in "
+            + path
+            + ". Available aliases: "
+            + available_aliases
         )
 
     return aliases[alias]
+
+
+def run_set_account_alias(account_id, alias, path=ACCOUNT_ALIASES_FILE):
+    account = set_account_alias(account_id, alias, path)
+    print("Updated account alias.")
+    print(account["account_name"] + " -> " + account["alias"])
+
+
+def run_edit_account_aliases(path=ACCOUNT_ALIASES_FILE, input_func=input):
+    data = load_account_aliases_data(path)
+    accounts = data["accounts"]
+    if not accounts:
+        raise ValueError(path + " does not contain any accounts.")
+
+    print("手入力口座一覧")
+    print("")
+    for index, account in enumerate(accounts, start=1):
+        print(
+            str(index)
+            + ". "
+            + account["account_name"].ljust(30)
+            + " alias: "
+            + account["alias"]
+        )
+
+    selected = input_func("変更する口座番号を選択してください: ").strip()
+    try:
+        selected_index = int(selected)
+    except ValueError as exc:
+        raise ValueError("口座番号は数字で入力してください。") from exc
+    if selected_index < 1 or selected_index > len(accounts):
+        raise ValueError("口座番号が範囲外です。")
+
+    account = accounts[selected_index - 1]
+    print("現在のエイリアス: " + account["alias"])
+    new_alias = input_func("新しいエイリアスを入力してください: ").strip()
+    validate_alias(new_alias)
+    updated = set_account_alias(account["account_id"], new_alias, path)
+
+    print("")
+    print("更新しました。")
+    print(updated["account_name"] + " -> " + updated["alias"])
 
 
 def parse_args():
@@ -98,6 +123,17 @@ def parse_args():
             "MoneyForwardの手入力口座一覧からaccount_aliases.jsonを生成します。"
             "CSVファイルは不要です。"
         ),
+    )
+    mode_group.add_argument(
+        "--set-account-alias-id",
+        nargs=2,
+        metavar=("ACCOUNT_ID", "ALIAS"),
+        help="account_aliases.jsonの手入力口座IDに対応するエイリアスを変更します。",
+    )
+    mode_group.add_argument(
+        "--edit-account-aliases",
+        action="store_true",
+        help="account_aliases.jsonのエイリアスを対話形式で変更します。",
     )
     account_group = parser.add_mutually_exclusive_group()
     account_group.add_argument(
@@ -127,7 +163,7 @@ def parse_args():
     parser.add_argument(
         "--output",
         default=ACCOUNT_ALIASES_FILE,
-        help="--generate-account-aliasesの出力先です。未指定時はaccount_aliases.jsonです。",
+        help="口座エイリアスファイルのパスです。未指定時はaccount_aliases.jsonです。",
     )
     parser.add_argument(
         "--force",
@@ -156,7 +192,12 @@ def main():
     if args.dry_run and args.validate_only:
         print("--dry-run and --validate-only cannot be used together.", file=sys.stderr)
         return 1
-    if args.generate_account_aliases and (
+    account_alias_maintenance_mode = (
+        args.generate_account_aliases
+        or args.set_account_alias_id is not None
+        or args.edit_account_aliases
+    )
+    if account_alias_maintenance_mode and (
         args.input_file is not None
         or args.account_id is not None
         or args.account is not None
@@ -164,17 +205,20 @@ def main():
         or args.validate_only
     ):
         print(
-            "--generate-account-aliases cannot be combined with CSV import options.",
+            "Account alias maintenance options cannot be combined with CSV import options.",
             file=sys.stderr,
         )
         return 1
-    if not args.generate_account_aliases and (
+    if not account_alias_maintenance_mode and (
         args.output != ACCOUNT_ALIASES_FILE or args.force
     ):
         print(
-            "--output and --force can only be used with --generate-account-aliases.",
+            "--output and --force can only be used with account alias maintenance options.",
             file=sys.stderr,
         )
+        return 1
+    if args.force and not args.generate_account_aliases:
+        print("--force can only be used with --generate-account-aliases.", file=sys.stderr)
         return 1
     if args.setup:
         try:
@@ -188,10 +232,10 @@ def main():
         run_show_config()
         return 0
 
-    if not args.generate_account_aliases and args.input_file is None:
+    if not account_alias_maintenance_mode and args.input_file is None:
         print(
             "input_file is required unless --setup, --show-config, or "
-            "--generate-account-aliases is used.",
+            "an account alias maintenance option is used.",
             file=sys.stderr,
         )
         return 1
@@ -205,7 +249,25 @@ def main():
             print(str(exc), file=sys.stderr)
             return 1
 
-        print("Generated " + args.output + " with " + str(len(aliases)) + " accounts.")
+        account_count = len(normalize_account_aliases_data(aliases)["accounts"])
+        print("Generated " + args.output + " with " + str(account_count) + " accounts.")
+        return 0
+
+    if args.set_account_alias_id is not None:
+        try:
+            account_id, alias = args.set_account_alias_id
+            run_set_account_alias(account_id, alias, args.output)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        return 0
+
+    if args.edit_account_aliases:
+        try:
+            run_edit_account_aliases(args.output)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
         return 0
 
     account_url = None

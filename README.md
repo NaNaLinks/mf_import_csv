@@ -151,6 +151,24 @@ python mf_import_csv.py --generate-account-aliases
 
 このコマンドはMoney Forwardへログインし、`https://moneyforward.com/accounts` にある `/accounts/show_manual/<口座ID>` のリンクから手入力口座だけを抽出して `account_aliases.json` を作成します。口座IDは数字だけでなく英数字、`_`、`-` を含む不透明IDとして扱います。自動連携口座は対象にしません。
 
+`account_aliases.json` には、MFから取得した正式な口座名、口座ID、ツール上で指定するaliasを保存します。正式口座名は絵文字や記号を含んだまま保持し、aliasだけをコマンドで扱いやすい形にします。
+
+```json
+{
+  "version": 1,
+  "accounts": [
+    {
+      "account_name": "サンプル現金",
+      "account_id": "123456",
+      "alias": "cash",
+      "alias_source": "auto"
+    }
+  ]
+}
+```
+
+自動生成されるaliasは、絵文字や装飾記号を除去し、英数字とアンダースコアを中心に正規化します。日本語だけの口座名では日本語aliasを使う場合があります。手動変更したaliasは `alias_source: "manual"` として扱い、再生成時に勝手に上書きしません。
+
 手入力口座リンクが見つからないなど、口座エイリアス生成に失敗した場合は、調査用ファイルを `logs/debug/generate-account-aliases_YYYYMMDD_HHMMSS/` に保存します。保存先はエラー時のログに表示されます。保存内容には現在URL、ページタイトル、スクリーンショット、HTML、リンク一覧、手入力口座候補一覧、エラー内容、実行モード情報が含まれるため、必要な確認が終わったら共有や保管範囲に注意してください。
 
 既に `account_aliases.json` がある場合は上書きしません。別ファイルへ出力する場合は `--output` を使います。
@@ -159,10 +177,22 @@ python mf_import_csv.py --generate-account-aliases
 python mf_import_csv.py --generate-account-aliases --output account_aliases.new.json
 ```
 
-既存ファイルを上書きする場合だけ、明示的に `--force` を付けます。
+既存ファイルを更新する場合だけ、明示的に `--force` を付けます。`alias_source: "manual"` のaliasは、再生成しても保持されます。
 
 ```sh
 python mf_import_csv.py --generate-account-aliases --force
+```
+
+口座IDを指定してaliasを変更できます。
+
+```sh
+python mf_import_csv.py --set-account-alias-id 123456 cash
+```
+
+一覧から番号を選んで対話形式でaliasを変更することもできます。
+
+```sh
+python mf_import_csv.py --edit-account-aliases
 ```
 
 エイリアスを使う場合は、次のように実行します。
@@ -280,6 +310,8 @@ CSV検証では次を確認します。
 | `--generate-account-aliases` | Money Forwardの手入力口座一覧から `account_aliases.json` を生成します。 | `python mf_import_csv.py --generate-account-aliases` |
 | `--generate-account-aliases --output` | 口座エイリアスを指定ファイルへ出力します。 | `python mf_import_csv.py --generate-account-aliases --output account_aliases.new.json` |
 | `--generate-account-aliases --force` | 既存の出力先を上書きして口座エイリアスを生成します。 | `python mf_import_csv.py --generate-account-aliases --force` |
+| `--set-account-alias-id` | 手入力口座IDを指定してaliasを変更します。 | `python mf_import_csv.py --set-account-alias-id 123456 cash` |
+| `--edit-account-aliases` | 手入力口座一覧から番号を選んでaliasを変更します。 | `python mf_import_csv.py --edit-account-aliases` |
 | `--validate-only` | CSV検証だけを行います。Money Forwardへ接続しません。 | `python mf_import_csv.py data.csv --validate-only` |
 | `--dry-run` | CSVを検証し、登録予定内容だけを表示します。Money Forwardへ接続しません。 | `python mf_import_csv.py data.csv --dry-run` |
 | `--account-id` | 手入力口座IDを直接指定してインポートします。 | `python mf_import_csv.py data.csv --account-id 123456` |
@@ -288,9 +320,9 @@ CSV検証では次を確認します。
 
 補足:
 
-- `--setup`、`--show-config`、`--generate-account-aliases` は相互排他です。
+- `--setup`、`--show-config`、`--generate-account-aliases`、`--set-account-alias-id`、`--edit-account-aliases` は相互排他です。
 - `--dry-run` と `--validate-only` は同時に使えません。
-- `--output` と `--force` は `--generate-account-aliases` と一緒に使う場合だけ有効です。
+- `--output` は口座エイリアス管理コマンドの対象ファイル指定に使えます。`--force` は `--generate-account-aliases` と一緒に使う場合だけ有効です。
 - `--account` と `--account-id` は同時に使えません。
 
 ## 6. よくある注意点
